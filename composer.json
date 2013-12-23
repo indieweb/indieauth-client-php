@@ -1,0 +1,20 @@
+{
+  "name": "indieauth/client",
+  "description": "IndieAuth Client Library",
+  "require": {
+    "php": ">5.3.0",
+    "indieweb/link-rel-parser": "0.1.1"
+  },
+  "license": "Apache 2.0",
+  "authors": [
+    {
+      "name": "Aaron Parecki",
+      "homepage": "http://aaronparecki.com"
+    }
+  ],
+  "autoload": {
+    "psr-0": {
+      "IndieAuth": "src/"
+    }
+  }
+}
