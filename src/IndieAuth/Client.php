@@ -81,7 +81,7 @@ class Client {
   }
 
   // Build the authorization URL for the given domain and endpoint
-  public static function buildAuthorizationURL($authorizationEndpoint, $domain, $redirectURI, $clientID, $state) {
+  public static function buildAuthorizationURL($authorizationEndpoint, $domain, $redirectURI, $clientID, $state, $scope='') {
     $url = parse_url($authorizationEndpoint);
 
     $params = array();
@@ -93,6 +93,7 @@ class Client {
     $params['redirect_uri'] = $redirectURI;
     $params['client_id'] = $clientID;
     $params['state'] = $state;
+    if($scope) $params['scope'] = $scope;
 
     $url['query'] = http_build_query($params);
 
@@ -127,6 +128,7 @@ class Client {
       'client_id' => $clientID
     )));
     $response = curl_exec($ch);
+
     $auth = json_decode($response);
     return $auth;
   }
@@ -144,7 +146,6 @@ class Client {
       'state' => $state,
       'client_id' => $clientID
     )));
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
     $response = curl_exec($ch);
 
     $auth = json_decode($response);
