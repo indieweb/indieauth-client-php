@@ -5,6 +5,9 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 
 class Client {
 
+  private static $_headers = null;
+  private static $_body = null;
+
   private static function _domainIsValid($domain) {
     $url = parse_url($domain);
 
@@ -22,21 +25,31 @@ class Client {
   }
 
   private static function _fetchHead($url) {
-    $ch = curl_init($url);
-    self::_setUserAgent($ch);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_HEADER, true);
-    curl_setopt($ch, CURLOPT_NOBODY, true);
-    return curl_exec($ch);
+    if(self::$_headers) {
+      return self::$_headers;
+    } else {
+      $ch = curl_init($url);
+      self::_setUserAgent($ch);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+      curl_setopt($ch, CURLOPT_HEADER, true);
+      curl_setopt($ch, CURLOPT_NOBODY, true);
+      self::$_headers = curl_exec($ch);
+      return self::$_headers;
+    }
   }
 
   private static function _fetchBody($url) {
-    $ch = curl_init($url);
-    self::_setUserAgent($ch);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    return curl_exec($ch);
+    if(self::$_body) {
+      return self::$_body;
+    } else {
+      $ch = curl_init($url);
+      self::_setUserAgent($ch);
+      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      self::$_body = curl_exec($ch);
+      return self::$_body;
+    }
   }
 
   private static function _discoverEndpoint($domain, $name) {
@@ -45,9 +58,8 @@ class Client {
 
     // First check the HTTP headers for an authorization endpoint
     $headerString = self::_fetchHead($domain);
-
     $headers = \IndieWeb\http_rels($headerString);
-
+    
     if($headers && array_key_exists($name, $headers)) {
       return $headers[$name][0];
     }
@@ -75,6 +87,10 @@ class Client {
     return self::_discoverEndpoint($domain, 'token_endpoint');
   }
 
+  public static function discoverMicropubEndpoint($domain) {
+    return self::_discoverEndpoint($domain, 'micropub_endpoint');
+  }
+
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
   public static function generateStateParameter() {
     return mt_rand(1000000, 9999999);
@@ -97,10 +113,10 @@ class Client {
 
     $url['query'] = http_build_query($params);
 
-    return self::_build_url($url);
+    return self::build_url($url);
   }
 
-  private static function _build_url($parsed_url) { 
+  public static function build_url($parsed_url) { 
     $scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : ''; 
     $host     = isset($parsed_url['host']) ? $parsed_url['host'] : ''; 
     $port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : ''; 
@@ -129,7 +145,7 @@ class Client {
     )));
     $response = curl_exec($ch);
 
-    $auth = json_decode($response);
+    $auth = json_decode($response, true);
     return $auth;
   }
 
@@ -152,9 +168,8 @@ class Client {
     return $auth;
   }
 
-
-
   private static function _setUserAgent(&$ch) {
+    // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36');
   }
 
