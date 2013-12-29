@@ -145,7 +145,8 @@ class Client {
     )));
     $response = curl_exec($ch);
 
-    $auth = json_decode($response, true);
+    $auth = array();
+    parse_str($response, $auth);
     return $auth;
   }
 
@@ -164,7 +165,8 @@ class Client {
     )));
     $response = curl_exec($ch);
 
-    $auth = json_decode($response);
+    $auth = array();
+    parse_str($response, $auth);
     return $auth;
   }
 
