@@ -26,7 +26,7 @@ The user will need to define three endpoints for their domain before a client ca
 <link rel="authorization_endpoint" href="https://indieauth.com/auth">
 ```
 
-```http
+```
 Link: <https://indieauth.com/auth>; rel="authorization_endpoint"
 ```
 
@@ -46,7 +46,7 @@ $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($domain
 <link rel="token_endpoint" href="https://aaronparecki.com/api/token">
 ```
 
-```http
+```
 Link: <https://aaronparecki.com/api/token>; rel="token_endpoint"
 ```
 
@@ -66,7 +66,7 @@ $tokenEndpoint = IndieAuth\Client::discoverTokenEndpoint($domain);
 <link rel="micropub_endpoint" href="https://aaronparecki.com/api/post">
 ```
 
-```http
+```
 Link: <https://aaronparecki.com/api/post>; rel="micropub_endpoint"
 ```
 
@@ -75,10 +75,89 @@ The [micropub](http://indiewebcamp.com/micropub) endpoint defines where API clie
 The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
 
 ```php
-$micropubEndpoint = IndieAuth\Client::discoverMicropubEndpoint($params['me']);
+$micropubEndpoint = IndieAuth\Client::discoverMicropubEndpoint($domain);
+```
+
+The client may wish to discover all three endpoints at the beginning, and cache the values in a session for later use.
+
+
+### Building the authorization URL
+
+Once the client has discovered the authorization server, it will need to build the authorization URL and direct the user's browser there.
+
+For web sites, the client should send a 301 redirect to the authorization URL, or can open a new browser window. Native apps must launch a native browser window to the autorization URL and handle the redirect back to the native app appropriately.
+
+#### Authorization URL Parameters
+* `me` - the user's domain name.
+* `redirect_uri` - where the authorization server should redirect after authorization is complete.
+* `client_id` - the full URL to a web page of the application. This is used by the authorization server to discover the app's name and icon, and to validate the redirect URI.
+* `state` - the "state" parameter can be whatever the client wishes, and must also be sent to the token endpoint when the client exchanges the authorization code for an access token.
+* `scope` - the "scope" value is a space-separated list of permissions the client is requesting.
+
+The following function will build the authorization URL given all the required parameters. If the authorization endpoint contains a query string, this function handles merging the existing query string parameters with the new parameters.
+
+```php
+$authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, $domain, $redirect_uri, $client_id, $state, $scope);
+```
+
+### Getting authorization from the user
+
+At this point, the authorization server interacts with the user, presenting them with a description of the request. This will look something like the following typical OAuth prompt:
+
+```
+An application, "Indie Bookmarks" is requesting access to your website, "aaronparecki.com"
+
+This application would like to be able to
+* **post** new entries on your website
+
+[ Approve ]   [ Deny ]
+```
+
+If the user approves the request, the authorization server will redirect back to the redirect URI specified, with the following parameters added to the query string:
+
+* `me` - the user's domain name
+* `code` - the authorization code
+* `state` - the state value provided in the request
+
+
+### Exchanging the authorization code for an access token
+
+Now that the client has obtained an authorization code, it needs to exchange it for an access token at the token endpoint.
+
+To get an access token, the client makes a POST request to the token endpoint, passing in the authorization code as well as the following parameters:
+
+* `code` - the authorization code obtained
+* `me` - the user's domain name
+* `redirect_uri` - must match the redirect URI used in the request to obtain the authorization code
+* `client_id` - must match the client ID used in the initial request
+* `state` - must match the state parameter used in the initial request 
+
+The following function will make a POST request to the token endpoint and parse the result.
+
+```php
+$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id, $_GET['state']);
+```
+
+The `$token` variable will look like the following:
+
+```php
+array(
+  'me' => 'http://aaronparecki.com',
+  'access_token' => 'xxxxxxxxx',
+  'scope' => 'post'
+);
 ```
 
 
+### Making API requests
+
+At this point, you are done using the IndieAuth client library and can begin making API requests directly to the user's website and micropub endpoint.
+
+To make an API request, include the access token in an HTTP "Authorization" header like the following:
+
+```
+Authorization: Bearer xxxxxxxx
+```
 
 
 
