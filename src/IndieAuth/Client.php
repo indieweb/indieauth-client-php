@@ -1,8 +1,6 @@
 <?php
 namespace IndieAuth;
 
-require_once __DIR__ . '/../../vendor/autoload.php';
-
 class Client {
 
   private static $_headers = null;
