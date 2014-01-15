@@ -86,7 +86,7 @@ class Client {
   }
 
   public static function discoverMicropubEndpoint($domain) {
-    return self::_discoverEndpoint($domain, 'micropub_endpoint');
+    return self::_discoverEndpoint($domain, 'micropub');
   }
 
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
