@@ -63,11 +63,11 @@ $tokenEndpoint = IndieAuth\Client::discoverTokenEndpoint($domain);
 #### Micropub Endpoint
 
 ```html
-<link rel="micropub_endpoint" href="https://aaronparecki.com/api/post">
+<link rel="micropub" href="https://aaronparecki.com/api/post">
 ```
 
 ```
-Link: <https://aaronparecki.com/api/post>; rel="micropub_endpoint"
+Link: <https://aaronparecki.com/api/post>; rel="micropub"
 ```
 
 The [micropub](http://indiewebcamp.com/micropub) endpoint defines where API clients will make POST requests to create new posts on the user's website. When an API client makes a request, the request will contain the previously-issued access token in the header, and the micropub endpoint will be able to validate the request given that access token.
