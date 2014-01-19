@@ -197,6 +197,15 @@ The response from the authorization server will be a form-encoded response conta
 me=http%3A%2F%2Faaronparecki.com&scope=post
 ```
 
+The `IndieAuth\Client::verifyIndieAuthCode` method parses this and returns it as an array:
+
+```
+$auth = array(
+  'me' => 'http://aaronparecki.com',
+  'scope' => 'post'
+);
+```
+
 If there was an error, the authorization server will return an HTTP 400 response with `error=invalid_request` and the `error_description` property indicating what went wrong. Errors may include:
 
 * Missing 'code' parameter - the request did not include the "code" parameter
