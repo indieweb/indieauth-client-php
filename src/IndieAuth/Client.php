@@ -128,7 +128,7 @@ class Client {
   } 
 
   // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $domain, $redirectURI, $clientID, $state) {
+  public static function getAccessToken($tokenEndpoint, $code, $domain, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
@@ -145,11 +145,20 @@ class Client {
 
     $auth = array();
     parse_str($response, $auth);
-    return $auth;
+
+    if($debug) {
+      return array(
+        'auth' => $auth,
+        'response' => $response,
+        'response_code' => curl_getinfo($ch, CURLINFO_HTTP_CODE)
+      );
+    } else {
+      return $auth;
+    }
   }
 
   // Used by a token endpoint to verify the auth code
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $domain, $redirectURI, $clientID, $state) {
+  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $domain, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
@@ -165,7 +174,16 @@ class Client {
 
     $auth = array();
     parse_str($response, $auth);
-    return $auth;
+
+    if($debug) {
+      return array(
+        'auth' => $auth,
+        'response' => $response,
+        'response_code' => curl_getinfo($ch, CURLINFO_HTTP_CODE)
+      );
+    } else {
+      return $auth;
+    }
   }
 
   private static function _setUserAgent(&$ch) {
