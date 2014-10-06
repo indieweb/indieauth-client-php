@@ -188,32 +188,22 @@ class Client {
     }
   }
 
-  public static function getHCard($url) {
+  public static function representativeHCard($url) {
     $html = self::_fetchBody($url);
     $parser = new \mf2\Parser($html, $url);
     $data = $parser->parse();
-    $hCard = false;
-    foreach($data['items'] as $item) {
-      if(Mf2\isMicroformat($item)) {
-        if(in_array('h-card', $item['type'])) {
-          $hCard = array(
-            'name' => false,
-            'photo' => false,
-            'url' => false
-          );
-          if(Mf2\hasProp($item, 'name'))
-            $hCard['name'] = Mf2\getPlaintext($item, 'name');
-          if(Mf2\hasProp($item, 'url'))
-            $hCard['url'] = Mf2\getPlaintext($item, 'url');
-          if(Mf2\hasProp($item, 'photo'))
-            $hCard['photo'] = Mf2\getPlaintext($item, 'photo');
-          if(count($hCard) == 0)
-            $hCard = false;
-        }
+    $hCards = Mf2\findMicroformatsByType($data, 'h-card');
+
+    // http://microformats.org/wiki/representative-hcard-parsing
+    foreach($hCards as $item) {
+      if(Mf2\hasProp($item, 'url') && Mf2\hasProp($item, 'uid')
+        && in_array($url, $item['properties']['url'])
+        && in_array($url, $item['properties']['uid'])) {
+        return $item;
       }
     }
 
-    return $hCard;
+    return false;
   }
 
   private static function _setUserAgent(&$ch) {
