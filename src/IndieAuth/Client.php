@@ -187,6 +187,34 @@ class Client {
     }
   }
 
+  public static function getHCard($url) {
+    $html = self::_fetchBody($url);
+    $parser = new \mf2\Parser($html, $url);
+    $data = $parser->parse();
+    $hCard = false;
+    foreach($data['items'] as $item) {
+      if(Mf2\isMicroformat($item)) {
+        if(in_array('h-card', $item['type'])) {
+          $hCard = array(
+            'name' => false,
+            'photo' => false,
+            'url' => false
+          );
+          if(Mf2\hasProp($item, 'name'))
+            $hCard['name'] = Mf2\getPlaintext($item, 'name');
+          if(Mf2\hasProp($item, 'url'))
+            $hCard['url'] = Mf2\getPlaintext($item, 'url');
+          if(Mf2\hasProp($item, 'photo'))
+            $hCard['photo'] = Mf2\getPlaintext($item, 'photo');
+          if(count($hCard) == 0)
+            $hCard = false;
+        }
+      }
+    }
+
+    return $hCard;
+  }
+
   private static function _setUserAgent(&$ch) {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36');
