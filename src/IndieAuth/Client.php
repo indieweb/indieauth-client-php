@@ -57,7 +57,7 @@ class Client {
     // First check the HTTP headers for an authorization endpoint
     $headerString = self::_fetchHead($domain);
     $headers = \IndieWeb\http_rels($headerString);
-    
+
     if($headers && array_key_exists($name, $headers)) {
       return $headers[$name][0];
     }
@@ -108,6 +108,7 @@ class Client {
     $params['client_id'] = $clientID;
     $params['state'] = $state;
     if($scope) $params['scope'] = $scope;
+    $params['response_type'] = 'code';
 
     $url['query'] = http_build_query($params);
 
