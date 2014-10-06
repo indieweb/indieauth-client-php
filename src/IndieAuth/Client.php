@@ -1,5 +1,6 @@
 <?php
 namespace IndieAuth;
+use BarnabyWalters\Mf2;
 
 class Client {
 
