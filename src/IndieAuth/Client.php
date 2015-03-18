@@ -108,8 +108,12 @@ class Client {
     $params['redirect_uri'] = $redirectURI;
     $params['client_id'] = $clientID;
     $params['state'] = $state;
-    if($scope) $params['scope'] = $scope;
-    $params['response_type'] = 'code';
+    if($scope) {
+      $params['scope'] = $scope;
+      $params['response_type'] = 'code';
+    } else {
+      $params['response_type'] = 'id';
+    }
 
     $url['query'] = http_build_query($params);
 
