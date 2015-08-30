@@ -37,6 +37,7 @@ Since this can be a full URL, this allows a website to use an external auth serv
 The following function will fetch the user's home page and return the authorization endpoint, or `false` if none was found.
 
 ```php
+$url = IndieAuth\Client::normalizeMeURL($url);
 $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($url);
 ```
 
@@ -57,6 +58,7 @@ The token endpoint is responsible for verifying the authorization code and gener
 The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
 
 ```php
+$url = IndieAuth\Client::normalizeMeURL($url);
 $tokenEndpoint = IndieAuth\Client::discoverTokenEndpoint($url);
 ```
 
@@ -75,6 +77,7 @@ The [micropub](http://indiewebcamp.com/micropub) endpoint defines where API clie
 The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
 
 ```php
+$url = IndieAuth\Client::normalizeMeURL($url);
 $micropubEndpoint = IndieAuth\Client::discoverMicropubEndpoint($url);
 ```
 
@@ -97,6 +100,7 @@ For web sites, the client should send a 301 redirect to the authorization URL, o
 The following function will build the authorization URL given all the required parameters. If the authorization endpoint contains a query string, this function handles merging the existing query string parameters with the new parameters.
 
 ```php
+$url = IndieAuth\Client::normalizeMeURL($url);
 $authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, $url, $redirect_uri, $client_id, $state, $scope);
 ```
 

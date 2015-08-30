@@ -95,7 +95,7 @@ class Client {
   }
 
   // Build the authorization URL for the given url and endpoint
-  public static function buildAuthorizationURL($authorizationEndpoint, $url, $redirectURI, $clientID, $state, $scope='') {
+  public static function buildAuthorizationURL($authorizationEndpoint, $me, $redirectURI, $clientID, $state, $scope='') {
     $url = parse_url($authorizationEndpoint);
 
     $params = array();
@@ -103,7 +103,7 @@ class Client {
       parse_str($url['query'], $params);
     }
 
-    $params['me'] = $url;
+    $params['me'] = $me;
     $params['redirect_uri'] = $redirectURI;
     $params['client_id'] = $clientID;
     $params['state'] = $state;
@@ -117,6 +117,39 @@ class Client {
     $url['query'] = http_build_query($params);
 
     return self::build_url($url);
+  }
+
+  // Input: Any URL or string like "aaronparecki.com"
+  // Output: Normlized URL (default to http if no scheme, default "/" path)
+  //         or return false if not a valid URL (has query string params, etc)
+  public static function normalizeMeURL($url) {
+    $me = parse_url($url);
+
+    if(array_key_exists('path', $me) && $me['path'] == '')
+      return false;
+
+    // parse_url returns just "path" for naked domains, so
+    // move that into the "host" instead
+    if(count($me) == 1 && array_key_exists('path', $me)) {
+      $me['host'] = $me['path'];
+      unset($me['path']);
+    }
+
+    if(!array_key_exists('scheme', $me))
+      $me['scheme'] = 'http';
+
+    if(!array_key_exists('path', $me))
+      $me['path'] = '/';
+
+    // Invalid scheme
+    if(!in_array($me['scheme'], array('http','https')))
+      return false;
+
+    // query and fragment not allowed
+    if(array_key_exists('query', $me) || array_key_exists('fragment', $me))
+      return false;
+
+    return self::build_url($me);
   }
 
   public static function build_url($parsed_url) { 
@@ -133,14 +166,14 @@ class Client {
   } 
 
   // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $url, $redirectURI, $clientID, $state, $debug=false) {
+  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_POST, TRUE);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
-      'me' => $url,
+      'me' => $me,
       'code' => $code,
       'redirect_uri' => $redirectURI,
       'state' => $state,
@@ -163,7 +196,7 @@ class Client {
   }
 
   // Used by a token endpoint to verify the auth code
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $url, $redirectURI, $clientID, $state, $debug=false) {
+  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
