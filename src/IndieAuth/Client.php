@@ -7,16 +7,15 @@ class Client {
   private static $_headers = null;
   private static $_body = null;
 
-  private static function _domainIsValid($domain) {
-    $url = parse_url($domain);
+  private static function _urlIsValid($url) {
+    $url = parse_url($url);
 
     if($url == false
       || !array_key_exists('scheme', $url)
       || !in_array($url['scheme'], array('http','https'))
       || !array_key_exists('host', $url)
-      || (array_key_exists('path', $url) && $url['path'] != '/')  // must be top-level domain, no paths
     ) {
-      // Invalid domain
+      // Invalid url
       return false;
     }
 
@@ -51,12 +50,12 @@ class Client {
     }
   }
 
-  private static function _discoverEndpoint($domain, $name) {
-    if(!self::_domainIsValid($domain))
+  private static function _discoverEndpoint($url, $name) {
+    if(!self::_urlIsValid($url))
       return null;
 
     // First check the HTTP headers for an authorization endpoint
-    $headerString = self::_fetchHead($domain);
+    $headerString = self::_fetchHead($url);
     $headers = \IndieWeb\http_rels($headerString);
 
     if($headers && array_key_exists($name, $headers)) {
@@ -64,7 +63,7 @@ class Client {
     }
 
     // If not found, check the body for a rel value
-    $html = self::_fetchBody($domain);
+    $html = self::_fetchBody($url);
 
     $parser = new \mf2\Parser($html);
     $data = $parser->parse();
@@ -78,16 +77,16 @@ class Client {
     return false;
   }
 
-  public static function discoverAuthorizationEndpoint($domain) {
-    return self::_discoverEndpoint($domain, 'authorization_endpoint');
+  public static function discoverAuthorizationEndpoint($url) {
+    return self::_discoverEndpoint($url, 'authorization_endpoint');
   }
 
-  public static function discoverTokenEndpoint($domain) {
-    return self::_discoverEndpoint($domain, 'token_endpoint');
+  public static function discoverTokenEndpoint($url) {
+    return self::_discoverEndpoint($url, 'token_endpoint');
   }
 
-  public static function discoverMicropubEndpoint($domain) {
-    return self::_discoverEndpoint($domain, 'micropub');
+  public static function discoverMicropubEndpoint($url) {
+    return self::_discoverEndpoint($url, 'micropub');
   }
 
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
@@ -95,8 +94,8 @@ class Client {
     return mt_rand(1000000, 9999999);
   }
 
-  // Build the authorization URL for the given domain and endpoint
-  public static function buildAuthorizationURL($authorizationEndpoint, $domain, $redirectURI, $clientID, $state, $scope='') {
+  // Build the authorization URL for the given url and endpoint
+  public static function buildAuthorizationURL($authorizationEndpoint, $url, $redirectURI, $clientID, $state, $scope='') {
     $url = parse_url($authorizationEndpoint);
 
     $params = array();
@@ -104,7 +103,7 @@ class Client {
       parse_str($url['query'], $params);
     }
 
-    $params['me'] = $domain;
+    $params['me'] = $url;
     $params['redirect_uri'] = $redirectURI;
     $params['client_id'] = $clientID;
     $params['state'] = $state;
@@ -134,14 +133,14 @@ class Client {
   } 
 
   // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $domain, $redirectURI, $clientID, $state, $debug=false) {
+  public static function getAccessToken($tokenEndpoint, $code, $url, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_POST, TRUE);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
-      'me' => $domain,
+      'me' => $url,
       'code' => $code,
       'redirect_uri' => $redirectURI,
       'state' => $state,
@@ -164,7 +163,7 @@ class Client {
   }
 
   // Used by a token endpoint to verify the auth code
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $domain, $redirectURI, $clientID, $state, $debug=false) {
+  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $url, $redirectURI, $clientID, $state, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
