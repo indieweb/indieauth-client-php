@@ -4,8 +4,8 @@ use BarnabyWalters\Mf2;
 
 class Client {
 
-  private static $_headers = null;
-  private static $_body = null;
+  private static $_headers = array();
+  private static $_body = array();
 
   private static function _urlIsValid($url) {
     $url = parse_url($url);
@@ -23,8 +23,8 @@ class Client {
   }
 
   private static function _fetchHead($url) {
-    if(self::$_headers) {
-      return self::$_headers;
+    if(array_key_exists($url, self::$_headers) {
+      return self::$_headers[$url];
     } else {
       $ch = curl_init($url);
       self::_setUserAgent($ch);
@@ -32,21 +32,21 @@ class Client {
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
       curl_setopt($ch, CURLOPT_HEADER, true);
       curl_setopt($ch, CURLOPT_NOBODY, true);
-      self::$_headers = curl_exec($ch);
-      return self::$_headers;
+      self::$_headers[$url] = curl_exec($ch);
+      return self::$_headers[$url];
     }
   }
 
   private static function _fetchBody($url) {
-    if(self::$_body) {
-      return self::$_body;
+    if(array_key_exists($url, self::$_body) {
+      return self::$_body[$url];
     } else {
       $ch = curl_init($url);
       self::_setUserAgent($ch);
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-      self::$_body = curl_exec($ch);
-      return self::$_body;
+      self::$_body[$url] = curl_exec($ch);
+      return self::$_body[$url];
     }
   }
 
@@ -152,18 +152,18 @@ class Client {
     return self::build_url($me);
   }
 
-  public static function build_url($parsed_url) { 
-    $scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : ''; 
-    $host     = isset($parsed_url['host']) ? $parsed_url['host'] : ''; 
-    $port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : ''; 
-    $user     = isset($parsed_url['user']) ? $parsed_url['user'] : ''; 
-    $pass     = isset($parsed_url['pass']) ? ':' . $parsed_url['pass']  : ''; 
-    $pass     = ($user || $pass) ? "$pass@" : ''; 
-    $path     = isset($parsed_url['path']) ? $parsed_url['path'] : ''; 
-    $query    = isset($parsed_url['query']) ? '?' . $parsed_url['query'] : ''; 
-    $fragment = isset($parsed_url['fragment']) ? '#' . $parsed_url['fragment'] : ''; 
-    return "$scheme$user$pass$host$port$path$query$fragment"; 
-  } 
+  public static function build_url($parsed_url) {
+    $scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
+    $host     = isset($parsed_url['host']) ? $parsed_url['host'] : '';
+    $port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
+    $user     = isset($parsed_url['user']) ? $parsed_url['user'] : '';
+    $pass     = isset($parsed_url['pass']) ? ':' . $parsed_url['pass']  : '';
+    $pass     = ($user || $pass) ? "$pass@" : '';
+    $path     = isset($parsed_url['path']) ? $parsed_url['path'] : '';
+    $query    = isset($parsed_url['query']) ? '?' . $parsed_url['query'] : '';
+    $fragment = isset($parsed_url['fragment']) ? '#' . $parsed_url['fragment'] : '';
+    return "$scheme$user$pass$host$port$path$query$fragment";
+  }
 
   // Used by clients to get an access token given an auth code
   public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $state, $debug=false) {
