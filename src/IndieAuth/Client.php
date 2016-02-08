@@ -23,7 +23,7 @@ class Client {
   }
 
   private static function _fetchHead($url) {
-    if(array_key_exists($url, self::$_headers) {
+    if(array_key_exists($url, self::$_headers)) {
       return self::$_headers[$url];
     } else {
       $ch = curl_init($url);
@@ -38,7 +38,7 @@ class Client {
   }
 
   private static function _fetchBody($url) {
-    if(array_key_exists($url, self::$_body) {
+    if(array_key_exists($url, self::$_body)) {
       return self::$_body[$url];
     } else {
       $ch = curl_init($url);
