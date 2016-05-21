@@ -65,7 +65,7 @@ class Client {
     // If not found, check the body for a rel value
     $html = self::_fetchBody($url);
 
-    $parser = new \mf2\Parser($html);
+    $parser = new \Mf2\Parser($html);
     $data = $parser->parse();
 
     if($data && array_key_exists('rels', $data)) {
@@ -226,7 +226,7 @@ class Client {
 
   public static function representativeHCard($url) {
     $html = self::_fetchBody($url);
-    $parser = new \mf2\Parser($html, $url);
+    $parser = new \Mf2\Parser($html, $url);
     $data = $parser->parse();
     $hCards = Mf2\findMicroformatsByType($data, 'h-card');
 
