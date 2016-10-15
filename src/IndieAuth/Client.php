@@ -4,14 +4,13 @@ use BarnabyWalters\Mf2;
 
 class Client {
 
-  protected $caInfo;
-
-  public function __construct($caInfo = null) {
-    $this->caInfo = $caInfo;
-  }
-
+  private static $_cainfo = null;
   private static $_headers = array();
   private static $_body = array();
+
+  public function __construct($caInfo = null) {
+    self::$_cainfo = $caInfo;
+  }
 
   private static function _urlIsValid($url) {
     $url = parse_url($url);
@@ -259,8 +258,8 @@ class Client {
 
   private static function _setCustomCaInfo(&$ch) {
     // Allow setting a custom cainfo, particularly useful for testing in a local environment with a self-signed cert
-    if ($this->caInfo !== null) {
-      curl_setopt($ch, CURLOPT_CAINFO, $this->caInfo);
+    if (self::$_cainfo !== null) {
+      curl_setopt($ch, CURLOPT_CAINFO, self::$_cainfo);
     }
   }
 
