@@ -181,8 +181,12 @@ class Client {
     )));
     $response = curl_exec($ch);
 
-    $auth = array();
-    parse_str($response, $auth);
+    $auth = json_decode($response, true);
+    if(!$auth) {
+      // Parse as form-encoded for fallback support
+      $auth = array();
+      parse_str($response, $auth);
+    }
 
     if($debug) {
       return array(
@@ -210,8 +214,12 @@ class Client {
     )));
     $response = curl_exec($ch);
 
-    $auth = array();
-    parse_str($response, $auth);
+    $auth = json_decode($response, true);
+    if(!$auth) {
+      // Parse as form-encoded for fallback support
+      $auth = array();
+      parse_str($response, $auth);
+    }
 
     if($debug) {
       return array(
