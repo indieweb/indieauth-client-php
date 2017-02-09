@@ -173,6 +173,7 @@ class Client {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_POST, TRUE);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
+      'grant_type' => 'authorization_code',
       'me' => $me,
       'code' => $code,
       'redirect_uri' => $redirectURI,
