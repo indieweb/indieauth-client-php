@@ -312,7 +312,7 @@ function requireAccessToken($requiredScope=false) {
 License
 -------
 
-Copyright 2013 by Aaron Parecki
+Copyright 2013-2017 by Aaron Parecki and contributors
 
-Available under the Apache 2.0 License. See LICENSE.txt
+Available under the MIT and Apache 2.0 licenses. See LICENSE.txt
 
