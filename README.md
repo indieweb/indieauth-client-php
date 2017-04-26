@@ -134,12 +134,11 @@ To get an access token, the client makes a POST request to the token endpoint, p
 * `me` - the user's URL
 * `redirect_uri` - must match the redirect URI used in the request to obtain the authorization code
 * `client_id` - must match the client ID used in the initial request
-* `state` - must match the state parameter used in the initial request 
 
 The following function will make a POST request to the token endpoint and parse the result.
 
 ```php
-$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id, $_GET['state']);
+$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id);
 ```
 
 The `$token` variable will look like the following:

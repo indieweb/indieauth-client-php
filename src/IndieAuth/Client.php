@@ -166,7 +166,7 @@ class Client {
   }
 
   // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $state, $debug=false) {
+  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
@@ -177,7 +177,6 @@ class Client {
       'me' => $me,
       'code' => $code,
       'redirect_uri' => $redirectURI,
-      'state' => $state,
       'client_id' => $clientID
     )));
     $response = curl_exec($ch);
@@ -201,7 +200,7 @@ class Client {
   }
 
   // Used by a token endpoint to verify the auth code
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $state, $debug=false) {
+  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
     curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
@@ -210,7 +209,6 @@ class Client {
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
       'code' => $code,
       'redirect_uri' => $redirectURI,
-      'state' => $state,
       'client_id' => $clientID
     )));
     $response = curl_exec($ch);
