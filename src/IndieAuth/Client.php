@@ -179,6 +179,9 @@ class Client {
       'redirect_uri' => $redirectURI,
       'client_id' => $clientID
     )));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+        'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
+    ));
     $response = curl_exec($ch);
 
     $auth = json_decode($response, true);
@@ -211,6 +214,9 @@ class Client {
       'redirect_uri' => $redirectURI,
       'client_id' => $clientID
     )));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+        'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
+    ));
     $response = curl_exec($ch);
 
     $auth = json_decode($response, true);
