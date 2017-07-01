@@ -2,6 +2,8 @@
 namespace IndieAuth;
 use BarnabyWalters\Mf2;
 
+define('RANDOM_BYTE_COUNT', 8);
+
 class Client {
 
   private static $_headers = array();
@@ -89,7 +91,17 @@ class Client {
 
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
   public static function generateStateParameter() {
-    return mt_rand(1000000, 9999999);
+    if(function_exists('random_bytes')) {
+      $bytes = random_bytes(RANDOM_BYTE_COUNT);
+    } elseif(function_exists('openssl_random_pseudo_bytes')){
+      $bytes = openssl_random_pseudo_bytes(RANDOM_BYTE_COUNT);
+    } else {
+      $bytes = '';
+      for($i=0, $bytes=''; $i < RANDOM_BYTE_COUNT; $i++) {
+        $bytes .= chr(mt_rand(0, 255));
+      }
+    }
+    return bin2hex($bytes);
   }
 
   // Build the authorization URL for the given url and endpoint
