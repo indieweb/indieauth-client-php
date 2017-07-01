@@ -58,8 +58,8 @@ class Client {
     $headerString = self::_fetchHead($url);
     $headers = \IndieWeb\http_rels($headerString);
 
-    if($headers && array_key_exists($name, $headers)) {
-      return $headers[$name][0];
+    if(isset($headers[$name][0]) && $headers[$name][0]) {
+      return \Mf2\resolveUrl($url, $headers[$name][0]);
     }
 
     // If not found, check the body for a rel value
@@ -68,10 +68,8 @@ class Client {
     $parser = new \Mf2\Parser($html);
     $data = $parser->parse();
 
-    if($data && array_key_exists('rels', $data)) {
-      if(array_key_exists($name, $data['rels'])) {
-        return $data['rels'][$name][0];
-      }
+    if(isset($data['rels'][$name][0]) && $data['rels'][$name][0]) {
+      return \Mf2\resolveUrl($url, $data['rels'][$name][0]);
     }
 
     return false;
