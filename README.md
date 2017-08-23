@@ -176,7 +176,6 @@ Requests to your token endpoint will contain the following parameters:
 * code
 * client_id
 * redirect_uri
-* state
 
 You will need to verify the code with the user's authorization server, and then create an access token for them.
 
@@ -186,12 +185,12 @@ First, discover the user's authorization server by looking for a `rel="authoriza
 $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($_POST['me']);
 ```
 
-If discovery is successful, `$authorizationEndpoint` will be the full URL, such as `https://indieauth.com/auth`. Now you need to verify the auth code with the auth server. To do this, you'll need to pass in all the parameters that were part of generating the auth code, including `redirect_uri`, `state` and `client_id`.
+If discovery is successful, `$authorizationEndpoint` will be the full URL, such as `https://indieauth.com/auth`. Now you need to verify the auth code with the auth server. To do this, you'll need to pass in all the parameters that were part of generating the auth code, including `redirect_uri` and `client_id`.
 
 ### Verifying the authorization code
 
 ```php
-$auth = IndieAuth\Client::verifyIndieAuthCode($authorizationEndpoint, $_POST['code'], $_POST['me'], $_POST['redirect_uri'], $_POST['client_id'], $_POST['state']);
+$auth = IndieAuth\Client::verifyIndieAuthCode($authorizationEndpoint, $_POST['code'], $_POST['me'], $_POST['redirect_uri'], $_POST['client_id']);
 ```
 
 The response from the authorization server will be a JSON response containing the `me` parameter and more importantly, the `scope` parameter which is the list of scopes that was part of the authorization request.
@@ -218,7 +217,6 @@ If there was an error, the authorization server will return an HTTP 400 response
 * Invalid code provided - could be because the code was not created at this authorization server, or just a bad code was provided
 * The auth code has expired - Authorization codes are only valid for a short time
 * The 'redirect_uri' parameter did not match
-* The 'state' parameter did not match
 
 The error messages are meant to be read by developers, not by end users. Your token endpoint can pass this error through for debugging purposes, or you can return your own error.
 
