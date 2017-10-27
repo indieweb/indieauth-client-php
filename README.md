@@ -79,6 +79,7 @@ The following function will fetch the user's home page and return the token endp
 ```php
 $url = IndieAuth\Client::normalizeMeURL($url);
 $micropubEndpoint = IndieAuth\Client::discoverMicropubEndpoint($url);
+$mediaEndpoint = IndieAuth\Client::discoverMediaEndpoint($url);
 ```
 
 The client may wish to discover all three endpoints at the beginning, and cache the values in a session for later use.

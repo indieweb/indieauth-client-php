@@ -89,6 +89,10 @@ class Client {
     return self::_discoverEndpoint($url, 'micropub');
   }
 
+  public static function discoverMediaEndpoint($url) {
+    return self::_discoverEndpoint($url, 'media_endpoint');
+  }
+
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
   public static function generateStateParameter() {
     if(function_exists('random_bytes')) {
