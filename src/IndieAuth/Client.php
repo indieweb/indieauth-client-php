@@ -6,8 +6,13 @@ define('RANDOM_BYTE_COUNT', 8);
 
 class Client {
 
+  private static $_cainfo = null;
   private static $_headers = array();
   private static $_body = array();
+
+  public function __construct($caInfo = null) {
+    self::$_cainfo = $caInfo;
+  }
 
   private static function _urlIsValid($url) {
     $url = parse_url($url);
@@ -30,6 +35,7 @@ class Client {
     } else {
       $ch = curl_init($url);
       self::_setUserAgent($ch);
+      self::_setCustomCaInfo($ch);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
       curl_setopt($ch, CURLOPT_HEADER, true);
@@ -45,6 +51,7 @@ class Client {
     } else {
       $ch = curl_init($url);
       self::_setUserAgent($ch);
+      self::_setCustomCaInfo($ch);
       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
       self::$_body[$url] = curl_exec($ch);
@@ -183,6 +190,7 @@ class Client {
   public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
+    self::_setCustomCaInfo($ch);
     curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_POST, TRUE);
@@ -220,6 +228,7 @@ class Client {
   public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     $ch = curl_init();
     self::_setUserAgent($ch);
+    self::_setCustomCaInfo($ch);
     curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_POST, TRUE);
@@ -272,6 +281,13 @@ class Client {
   private static function _setUserAgent(&$ch) {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36');
+  }
+
+  private static function _setCustomCaInfo(&$ch) {
+    // Allow setting a custom cainfo, particularly useful for testing in a local environment with a self-signed cert
+    if (self::$_cainfo !== null) {
+      curl_setopt($ch, CURLOPT_CAINFO, self::$_cainfo);
+    }
   }
 
 }
