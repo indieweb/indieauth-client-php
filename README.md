@@ -3,6 +3,8 @@ IndieAuth Client
 
 This is a simple library to help with IndieAuth. There are two ways you may want to use it, either when developing an application that signs people in using IndieAuth, or when developing your own endpoint for issuing access tokens and you need to verify auth codes.
 
+[![Build Status](https://travis-ci.org/indieweb/indieauth-client-php.png?branch=master)](http://travis-ci.org/indieweb/indieauth-client-php)
+
 Usage for Clients
 -----------------
 
