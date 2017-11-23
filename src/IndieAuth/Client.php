@@ -148,7 +148,7 @@ class Client {
 
   // Input: Any URL or string like "aaronparecki.com"
   // Output: Normlized URL (default to http if no scheme, default "/" path)
-  //         or return false if not a valid URL (has query string params, etc)
+  //         or return false if not a valid IndieAuth URL (has a fragment)
   public static function normalizeMeURL($url) {
     $me = parse_url($url);
 
@@ -172,8 +172,8 @@ class Client {
     if(!in_array($me['scheme'], array('http','https')))
       return false;
 
-    // query and fragment not allowed
-    if(array_key_exists('query', $me) || array_key_exists('fragment', $me))
+    // fragment not allowed
+    if(array_key_exists('fragment', $me))
       return false;
 
     return self::build_url($me);
