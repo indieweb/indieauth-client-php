@@ -8,6 +8,8 @@ class Client {
 
   private static $_headers = array();
   private static $_body = array();
+  private static $_parsed = null;
+  private static $_parsedHash = null;
 
   private static function _urlIsValid($url) {
     $url = parse_url($url);
@@ -67,11 +69,18 @@ class Client {
     // If not found, check the body for a rel value
     $html = self::_fetchBody($url);
 
-    $parser = new \Mf2\Parser($html);
-    $data = $parser->parse();
+    return self::_extractEndpointFromHTML($html, $url, $name);
+  }
 
-    if(isset($data['rels'][$name][0]) && $data['rels'][$name][0]) {
-      return \Mf2\resolveUrl($url, $data['rels'][$name][0]);
+  private static function _extractEndpointFromHTML($html, $url, $name) {
+    if(self::$_parsedHash != ($h=md5($html))) {
+      $parser = new \Mf2\Parser($html);
+      self::$_parsed = $parser->parse();
+      self::$_parsedHash = $h;
+    }
+
+    if(isset(self::$_parsed['rels'][$name][0]) && self::$_parsed['rels'][$name][0]) {
+      return \Mf2\resolveUrl($url, self::$_parsed['rels'][$name][0]);
     }
 
     return false;
