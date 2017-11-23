@@ -60,16 +60,24 @@ class Client {
 
     // First check the HTTP headers for an authorization endpoint
     $headerString = self::_fetchHead($url);
-    $headers = \IndieWeb\http_rels($headerString);
 
-    if(isset($headers[$name][0]) && $headers[$name][0]) {
-      return \Mf2\resolveUrl($url, $headers[$name][0]);
-    }
+    if($endpoint = self::_extractEndpointFromHeaders($headerString, $url, $name))
+      return $endpoint;
 
     // If not found, check the body for a rel value
     $html = self::_fetchBody($url);
 
     return self::_extractEndpointFromHTML($html, $url, $name);
+  }
+
+  private static function _extractEndpointFromHeaders($headerString, $url, $name) {
+    $headers = \IndieWeb\http_rels($headerString);
+
+    if(isset($headers[$name][0])) {
+      return \Mf2\resolveUrl($url, $headers[$name][0]);
+    }
+
+    return false;
   }
 
   private static function _extractEndpointFromHTML($html, $url, $name) {
@@ -79,7 +87,7 @@ class Client {
       self::$_parsedHash = $h;
     }
 
-    if(isset(self::$_parsed['rels'][$name][0]) && self::$_parsed['rels'][$name][0]) {
+    if(isset(self::$_parsed['rels'][$name][0])) {
       return \Mf2\resolveUrl($url, self::$_parsed['rels'][$name][0]);
     }
 
