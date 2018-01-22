@@ -1,6 +1,5 @@
 <?php
 namespace IndieAuth;
-use BarnabyWalters\Mf2;
 
 define('RANDOM_BYTE_COUNT', 8);
 
@@ -10,6 +9,19 @@ class Client {
   private static $_body = array();
   private static $_parsed = null;
   private static $_parsedHash = null;
+
+  public static $http;
+
+  public static function setUpHTTP() {
+    // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
+    if(!isset(self::$http)) {
+      self::$http = new \p3k\HTTP();
+      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36 indieauth-client/0.2.5');
+      self::$http->_timeout = 10;
+      // You can customize the user agent for your application by calling
+      // IndieAuth\Client::$http->set_user_agent('Your User Agent String');
+    }
+  }
 
   private static function _urlIsValid($url) {
     $url = parse_url($url);
@@ -27,29 +39,25 @@ class Client {
   }
 
   private static function _fetchHead($url) {
+    self::setUpHTTP();
+
     if(array_key_exists($url, self::$_headers)) {
       return self::$_headers[$url];
     } else {
-      $ch = curl_init($url);
-      self::_setUserAgent($ch);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-      curl_setopt($ch, CURLOPT_HEADER, true);
-      curl_setopt($ch, CURLOPT_NOBODY, true);
-      self::$_headers[$url] = curl_exec($ch);
+      $headers = self::$http->head($url);
+      self::$_headers[$url] = $headers['header'];
       return self::$_headers[$url];
     }
   }
 
   private static function _fetchBody($url) {
+    self::setUpHTTP();
+
     if(array_key_exists($url, self::$_body)) {
       return self::$_body[$url];
     } else {
-      $ch = curl_init($url);
-      self::_setUserAgent($ch);
-      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-      self::$_body[$url] = curl_exec($ch);
+      $response = self::$http->get($url);
+      self::$_body[$url] = $response['body'];
       return self::$_body[$url];
     }
   }
@@ -199,35 +207,30 @@ class Client {
 
   // Used by clients to get an access token given an auth code
   public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
-    $ch = curl_init();
-    self::_setUserAgent($ch);
-    curl_setopt($ch, CURLOPT_URL, $tokenEndpoint);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-    curl_setopt($ch, CURLOPT_POST, TRUE);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
+    self::setUpHTTP();
+
+    $response = self::$http->post($url, http_build_query(array(
       'grant_type' => 'authorization_code',
       'me' => $me,
       'code' => $code,
       'redirect_uri' => $redirectURI,
       'client_id' => $clientID
-    )));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-        'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
+    )), array(
+      'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
     ));
-    $response = curl_exec($ch);
 
-    $auth = json_decode($response, true);
+    $auth = json_decode($response['body'], true);
     if(!$auth) {
       // Parse as form-encoded for fallback support
       $auth = array();
-      parse_str($response, $auth);
+      parse_str($response['body'], $auth);
     }
 
     if($debug) {
       return array(
         'auth' => $auth,
-        'response' => $response,
-        'response_code' => curl_getinfo($ch, CURLINFO_HTTP_CODE)
+        'response' => $response['body'],
+        'response_code' => $response['code']
       );
     } else {
       return $auth;
@@ -236,33 +239,28 @@ class Client {
 
   // Used by a token endpoint to verify the auth code
   public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
-    $ch = curl_init();
-    self::_setUserAgent($ch);
-    curl_setopt($ch, CURLOPT_URL, $authorizationEndpoint);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-    curl_setopt($ch, CURLOPT_POST, TRUE);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
+    self::setUpHTTP();
+
+    $response = self::$http->post($url, http_build_query(array(
       'code' => $code,
       'redirect_uri' => $redirectURI,
       'client_id' => $clientID
-    )));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-        'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
+    )), array(
+      'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
     ));
-    $response = curl_exec($ch);
 
-    $auth = json_decode($response, true);
+    $auth = json_decode($response['body'], true);
     if(!$auth) {
       // Parse as form-encoded for fallback support
       $auth = array();
-      parse_str($response, $auth);
+      parse_str($response['body'], $auth);
     }
 
     if($debug) {
       return array(
         'auth' => $auth,
-        'response' => $response,
-        'response_code' => curl_getinfo($ch, CURLINFO_HTTP_CODE)
+        'response' => $response['body'],
+        'response_code' => $response['code']
       );
     } else {
       return $auth;
@@ -271,25 +269,8 @@ class Client {
 
   public static function representativeHCard($url) {
     $html = self::_fetchBody($url);
-    $parser = new \Mf2\Parser($html, $url);
-    $data = $parser->parse();
-    $hCards = Mf2\findMicroformatsByType($data, 'h-card');
-
-    // http://microformats.org/wiki/representative-hcard-parsing
-    foreach($hCards as $item) {
-      if(Mf2\hasProp($item, 'url') && Mf2\hasProp($item, 'uid')
-        && in_array($url, $item['properties']['url'])
-        && in_array($url, $item['properties']['uid'])) {
-        return $item;
-      }
-    }
-
-    return false;
-  }
-
-  private static function _setUserAgent(&$ch) {
-    // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36');
+    $parsed = \Mf2\parse($html, $url);
+    return \Mf2\HCard\representative($parsed, $url);
   }
 
 }
