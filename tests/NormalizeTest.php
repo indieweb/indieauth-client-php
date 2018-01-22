@@ -8,6 +8,12 @@ class NormalizeTest extends IndieAuthTestCase {
     $this->assertEquals('http://aaronpk.com/', $normalized);
   }
 
+  public function testNoSchemeWithPath() {
+    $url = 'aaronpk.com/me';
+    $normalized = IndieAuth\Client::normalizeMeURL($url);
+    $this->assertEquals('http://aaronpk.com/me', $normalized);
+  }
+
   public function testNoSlash() {
     $url = 'https://aaronpk.com';
     $normalized = IndieAuth\Client::normalizeMeURL($url);

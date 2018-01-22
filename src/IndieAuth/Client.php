@@ -158,8 +158,13 @@ class Client {
     // parse_url returns just "path" for naked domains, so
     // move that into the "host" instead
     if(count($me) == 1 && array_key_exists('path', $me)) {
-      $me['host'] = $me['path'];
-      unset($me['path']);
+      if(preg_match('/([^\/]+)(\/.+)/', $me['path'], $match)) {
+        $me['host'] = $match[1];
+        $me['path'] = $match[2];
+      } else {
+        $me['host'] = $me['path'];
+        unset($me['path']);
+      }
     }
 
     if(!array_key_exists('scheme', $me))
