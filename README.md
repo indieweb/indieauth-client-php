@@ -9,7 +9,7 @@ This is a simple library to help with IndieAuth. There are two ways you may want
 Quick Start
 -----------
 
-If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed) below.
+If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed-usage-for-clients-detailed) below.
 
 ### Create a Login Form
 
@@ -107,7 +107,7 @@ if($error) {
 ```
 
 
-Detailed Usage for Clients {#detailed}
+Detailed Usage for Clients
 --------------------------
 
 The first thing an IndieAuth client needs to do is to prompt the user to enter their web address. This is the basis of IndieAuth, requiring each person to have their own website. A typical IndieAuth sign-in form may look something like the following.
