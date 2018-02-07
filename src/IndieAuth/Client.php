@@ -12,6 +12,127 @@ class Client {
 
   public static $http;
 
+  public static $clientID;
+  public static $redirectURL;
+
+  // Handles everything you need to start the authorization process.
+  // Discovers the user's auth endpoints, generates and stores a state in the session.
+  // Returns an authorization URL or an error array.
+  public static function begin($url, $scope=false) {
+    if(!isset(self::$clientID) || !isset(self::$redirectURL)) {
+      return [false, [
+        'error' => 'not_configured',
+        'error_description' => 'Before you can begin, you need to configure the clientID and redirectURL of the IndieAuth client'
+      ]];
+    }
+
+    $url = self::normalizeMeURL($url);
+
+    $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
+
+    if(!$authorizationEndpoint) {
+      return [false, [
+        'error' => 'missing_authorization_endpoint',
+        'error_description' => 'Could not find your authorization endpoint'
+      ]];
+    }
+
+    if($scope) {
+      $tokenEndpoint = self::discoverTokenEndpoint($url);
+
+      if(!$tokenEndpoint) {
+        return [false, [
+          'error' => 'missing_token_endpoint',
+          'error_description' => 'Could not find your token endpoint'
+        ]];
+      }
+    }
+
+    $state = self::generateStateParameter();
+
+    $_SESSION['indieauth_url'] = $url;
+    $_SESSION['indieauth_state'] = $state;
+    $_SESSION['indieauth_authorization_endpoint'] = $authorizationEndpoint;
+    if($scope)
+      $_SESSION['indieauth_token_endpoint'] = $tokenEndpoint;
+
+    $authorizationURL = self::buildAuthorizationURL($authorizationEndpoint, $url, self::$redirectURL, self::$clientID, $state, $scope);
+
+    return [$authorizationURL, false];
+  }
+
+  public static function complete($params) {
+    $requiredSessionKeys = ['indieauth_url', 'indieauth_state', 'indieauth_authorization_endpoint'];
+    foreach($requiredSessionKeys as $key) {
+      if(!isset($_SESSION[$key])) {
+        return [false, [
+          'error' => 'invalid_session',
+          'error_description' => 'The session was missing data. Ensure that you are initializing the session before using this library'
+        ]];
+      }
+    }
+
+    if(isset($params['error'])) {
+      return [false, [
+        'error' => $params['error'],
+        'error_description' => (isset($params['error_description']) ? $params['error_description'] : '')
+      ]];
+    }
+
+    if(!isset($params['code'])) {
+      return [false, [
+        'error' => 'invalid_response',
+        'error_description' => 'The response from the authorization server did not return an authorization code or error information'
+      ]];
+    }
+
+    if(!isset($params['state'])) {
+      return [false, [
+        'error' => 'missing_state',
+        'error_description' => 'The authorization server did not return the state parameter'
+      ]];
+    }
+
+    if($params['state'] != $_SESSION['indieauth_state']) {
+      return [false, [
+        'error' => 'invalid_state',
+        'error_description' => 'The authorization server returned an invalid state parameter'
+      ]];
+    }
+
+    if(isset($_SESSION['indieauth_token_endpoint'])) {
+      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID);
+    } else {
+      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID);
+    }
+
+    $expectedURL = $_SESSION['indieauth_url'];
+    unset($_SESSION['indieauth_url']);
+    unset($_SESSION['indieauth_state']);
+    unset($_SESSION['indieauth_authorization_endpoint']);
+    unset($_SESSION['indieauth_token_endpoint']);
+
+    if(!isset($verify['me'])) {
+      return [false, [
+        'error' => 'indieauth_error',
+        'error_description' => 'The authorization code was not able to be verified'
+      ]];
+    }
+
+    // Check that the returned URL is on the same domain as the original URL
+    if(parse_url($verify['me'], PHP_URL_HOST) != parse_url($expectedURL, PHP_URL_HOST)) {
+      return [false, [
+        'error' => 'invalid user',
+        'error_description' => 'The domain for the user returned did not match the domain of the user initially signing in'
+      ]];
+    }
+
+    $verify['me'] = self::normalizeMeURL($verify['me']);
+
+    return [$verify, false];
+  }
+
+
   public static function setUpHTTP() {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     if(!isset(self::$http)) {
@@ -100,6 +221,41 @@ class Client {
     }
 
     return false;
+  }
+
+  public static function resolveMeURL($url, $max=4) {
+    // Follow redirects and return the identity URL at the end of the chain.
+    // Permanent redirects affect the identity URL, temporary redirects do not.
+    // A maximum of N redirects will be followed.
+    self::setUpHTTP();
+
+    $oldmax = self::$http->_max_redirects;
+    self::$http->_max_redirects = 0;
+
+    $i = 0;
+    while($i < $max) {
+      $result = self::$http->head($url);
+      if($result['code'] == 200) {
+        break;
+      } elseif($result['code'] == 301) {
+        // Follow the permanent redirect
+        if(isset($result['headers']['Location']) && is_string($result['headers']['Location'])) {
+          $url = $result['headers']['Location'];
+        } else {
+          $url = false; // something wrong with the Location header
+        }
+      } elseif($result['code'] == 302) {
+        // Temporary redirect, so abort with the current URL
+        break;
+      } else {
+        $url = false;
+        break;
+      }
+      $i++;
+    }
+
+    self::$http->_max_redirects = $oldmax;
+    return $url;
   }
 
   public static function discoverAuthorizationEndpoint($url) {
@@ -209,7 +365,7 @@ class Client {
   public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     self::setUpHTTP();
 
-    $response = self::$http->post($url, http_build_query(array(
+    $response = self::$http->post($tokenEndpoint, http_build_query(array(
       'grant_type' => 'authorization_code',
       'me' => $me,
       'code' => $code,
@@ -237,11 +393,11 @@ class Client {
     }
   }
 
-  // Used by a token endpoint to verify the auth code
+  // Note: the $me parameter is deprecated and you can just pass null instead
   public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
     self::setUpHTTP();
 
-    $response = self::$http->post($url, http_build_query(array(
+    $response = self::$http->post($authorizationEndpoint, http_build_query(array(
       'code' => $code,
       'redirect_uri' => $redirectURI,
       'client_id' => $clientID

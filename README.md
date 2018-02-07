@@ -5,8 +5,110 @@ This is a simple library to help with IndieAuth. There are two ways you may want
 
 [![Build Status](https://travis-ci.org/indieweb/indieauth-client-php.png?branch=master)](http://travis-ci.org/indieweb/indieauth-client-php)
 
-Usage for Clients
------------------
+
+Quick Start
+-----------
+
+If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed) below.
+
+### Create a Login Form
+
+You'll first need to create a login form to prompt the user to enter their website address. This might look something like the HTML below.
+
+```html
+<form action="/login.php" method="post">
+  <input type="url" name="url">
+  <input type="submit" value="Log In">
+</form>
+```
+
+### Begin the Login Flow
+
+In the `login.php` file, you'll need to initialize the session, and tell this library to discover the user's endpoints. If everything succeeds, the library will return a URL that you can use to redirect the user to begin the flow.
+
+The example below will have some really basic error handling, which you'll probably want to replace with something nicer looking.
+
+Example `login.php` file:
+
+```php
+<?php
+
+if(!isset($_POST['url'])) {
+  die('Missing URL');
+}
+
+// Start a session for the library to be able to save state between requests.
+session_start();
+
+// You'll need to set up two pieces of information before you can use the client,
+// the client ID and and the redirect URL.
+
+// The client ID should be the home page of your app.
+IndieAuth\Client::$clientID = 'https://example.com/';
+
+// The redirect URL is where the user will be returned to after they approve the request.
+IndieAuth\Client::$redirectURL = 'https://example.com/redirect.php';
+
+// Pass the user's URL and your requested scope to the client.
+// If you are writing a Micropub client, you should include at least the "create" scope.
+// If you are just trying to log the user in, you can omit the second parameter.
+
+list($authorizationURL, $error) = IndieAuth\Client::begin($_POST['url'], 'create');
+// or list($authorizationURL, $error) = IndieAuth\Client::begin($_POST['url']);
+
+// Check whether the library was able to discover the necessary endpoints
+if($error) {
+  echo "<p>Error: ".$error['error']."</p>";
+  echo "<p>".$error['error_description']."</p>";
+} else {
+  // Redirect the user to their authorization endpoint
+  header('Location: '.$authorizationURL);
+}
+
+```
+
+### Handling the Callback
+
+In your callback file, you just need to pass all the query string parameters to the library and it will take care of things! It will use the authorization or token endpoint it found in the initial step, and will check the authorization code or exchange it for an access token as appropriate.
+
+The result will be the response from the authorization endpoint, which will contain the user's final `me` URL as well as the access token if you requested one or more scopes.
+
+If there were any problems, the error information will be returned to you as well.
+
+The library takes care of canonicalizing the user's URL, as well as checking that the final URL is on the same domain as the entered URL.
+
+Example `redirect.php` file:
+
+```php
+<?php
+session_start();
+IndieAuth\Client::$clientID = 'https://example.com/';
+IndieAuth\Client::$redirectURL = 'https://example.com/redirect.php';
+
+list($user, $error) = IndieAuth\Client::complete($_GET);
+
+if($error) {
+  echo "<p>Error: ".$error['error']."</p>";
+  echo "<p>".$error['error_description']."</p>";
+} else {
+  // Login succeeded!
+  // If you requested a scope, then there will be an access token in the response.
+  // Otherwise there will just be the user's URL.
+  echo "URL: ".$user['me']."<br>";
+  if(isset($user['access_token'])) {
+    echo "Access Token: ".$user['access_token']."<br>";
+    echo "Scope: ".$user['scope']."<br>";
+  }
+
+  // You'll probably want to save the user's URL in the session
+  $_SESSION['user'] = $user['me'];
+}
+
+```
+
+
+Detailed Usage for Clients {#detailed}
+--------------------------
 
 The first thing an IndieAuth client needs to do is to prompt the user to enter their web address. This is the basis of IndieAuth, requiring each person to have their own website. A typical IndieAuth sign-in form may look something like the following.
 
