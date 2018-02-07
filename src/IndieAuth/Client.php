@@ -27,6 +27,7 @@ class Client {
     }
 
     $url = self::normalizeMeURL($url);
+    $url = self::resolveMeURL($url);
 
     $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
 
