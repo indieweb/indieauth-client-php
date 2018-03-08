@@ -213,6 +213,7 @@ class Client {
   private static function _extractEndpointFromHTML($html, $url, $name) {
     if(self::$_parsedHash != ($h=md5($html))) {
       $parser = new \Mf2\Parser($html);
+      $parser->enableAlternates = true;
       self::$_parsed = $parser->parse();
       self::$_parsedHash = $h;
     }
