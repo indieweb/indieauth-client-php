@@ -29,6 +29,13 @@ class Client {
     $url = self::normalizeMeURL($url);
     $url = self::resolveMeURL($url);
 
+    if(!$url) {
+      return [false, [
+        'error' => 'error_fetching_url',
+        'error_description' => 'There was an error fetching the profile URL when checking for redirects.'
+      ]];
+    }
+
     $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
 
     if(!$authorizationEndpoint) {
