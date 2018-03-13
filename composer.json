@@ -21,12 +21,5 @@
     "psr-0": {
       "IndieAuth": "src/"
     }
-  },
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/aaronpk/php-mf2.git",
-      "no-api": true
-    }
-  ]
+  }
 }
