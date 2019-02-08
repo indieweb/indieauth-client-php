@@ -36,6 +36,8 @@ class Client {
       ]];
     }
 
+    $_SESSION['indieauth_url'] = $url;
+
     $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
 
     if(!$authorizationEndpoint) {
@@ -58,7 +60,6 @@ class Client {
 
     $state = self::generateStateParameter();
 
-    $_SESSION['indieauth_url'] = $url;
     $_SESSION['indieauth_state'] = $state;
     $_SESSION['indieauth_authorization_endpoint'] = $authorizationEndpoint;
     if($scope)
@@ -69,7 +70,7 @@ class Client {
     return [$authorizationURL, false];
   }
 
-  public static function complete($params) {
+  public static function complete($params, $debug=false) {
     $requiredSessionKeys = ['indieauth_url', 'indieauth_state', 'indieauth_authorization_endpoint'];
     foreach($requiredSessionKeys as $key) {
       if(!isset($_SESSION[$key])) {
@@ -109,9 +110,9 @@ class Client {
     }
 
     if(isset($_SESSION['indieauth_token_endpoint'])) {
-      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID);
+      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID, $debug);
     } else {
-      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID);
+      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID, $debug);
     }
 
     $expectedURL = $_SESSION['indieauth_url'];
@@ -119,6 +120,10 @@ class Client {
     unset($_SESSION['indieauth_state']);
     unset($_SESSION['indieauth_authorization_endpoint']);
     unset($_SESSION['indieauth_token_endpoint']);
+
+    if($debug) {
+      $verify['me'] = $verify['auth']['me'];
+    }
 
     if(!isset($verify['me'])) {
       return [false, [
