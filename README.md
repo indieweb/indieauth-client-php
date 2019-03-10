@@ -134,7 +134,7 @@ The user will need to define three endpoints for their URL before a client can p
 Link: <https://indieauth.com/auth>; rel="authorization_endpoint"
 ```
 
-The authorization endpoint allows a website to specify the location to direct the user's browser to when performing the initial authorization request. 
+The authorization endpoint allows a website to specify the location to direct the user's browser to when performing the initial authorization request.
 
 Since this can be a full URL, this allows a website to use an external auth server such as [indieauth.com](https://indieauth.com) as its authorization endpoint. This allows people to delegate the handling and verification of authorization and authentication to an external service to speed up development. Of course at any point, the authorization server can be changed, and API clients and users will not need any modifications.
 
@@ -157,7 +157,7 @@ Link: <https://aaronparecki.com/api/token>; rel="token_endpoint"
 
 The token endpoint is where API clients will request access tokens. This will typically be a URL on the user's own website, although this can technically be delegated to an external service as well.
 
-The token endpoint is responsible for verifying the authorization code and generating an access token. 
+The token endpoint is responsible for verifying the authorization code and generating an access token.
 
 The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
 
@@ -200,30 +200,33 @@ For web sites, the client should send a 301 redirect to the authorization URL, o
 * `client_id` - the full URL to a web page of the application. This is used by the authorization server to discover the app's name and icon, and to validate the redirect URI.
 * `state` - the "state" parameter can be whatever the client wishes, and must also be sent to the token endpoint when the client exchanges the authorization code for an access token.
 * `scope` - the "scope" value is a space-separated list of permissions the client is requesting.
+* `code_challenge` - for [PKCE](https://oauth.net/2/pkce/) support, this is the hashed version of a secret the client generates when it starts.
+* `code_challenge_method` - this library will always use S256 as the hash method.
 
 The following function will build the authorization URL given all the required parameters. If the authorization endpoint contains a query string, this function handles merging the existing query string parameters with the new parameters.
 
 ```php
 $url = IndieAuth\Client::normalizeMeURL($url);
-$authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, $url, $redirect_uri, $client_id, $state, $scope);
+$authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, $url, $redirect_uri, $client_id, $state, $scope, $code_verifier);
 ```
+
+Note: Your code should include the plaintext random secret, the `IndieAuth\Client` library will deal with hashing it for you.
 
 ### Getting authorization from the user
 
 At this point, the authorization server interacts with the user, presenting them with a description of the request. This will look something like the following typical OAuth prompt:
 
 ```
-An application, "Indie Bookmarks" is requesting access to your website, "aaronparecki.com"
+An application, "Quill" is requesting access to your website, "aaronparecki.com"
 
 This application would like to be able to
-* **post** new entries on your website
+* **create** new entries on your website
 
 [ Approve ]   [ Deny ]
 ```
 
 If the user approves the request, the authorization server will redirect back to the redirect URI specified, with the following parameters added to the query string:
 
-* `me` - the user's URL
 * `code` - the authorization code
 * `state` - the state value provided in the request
 
@@ -238,20 +241,21 @@ To get an access token, the client makes a POST request to the token endpoint, p
 * `me` - the user's URL
 * `redirect_uri` - must match the redirect URI used in the request to obtain the authorization code
 * `client_id` - must match the client ID used in the initial request
+* `code_verifier` - if the client included a code challenge in the authorization request, then it must include the plaintext secret in the code exchange step here
 
 The following function will make a POST request to the token endpoint and parse the result.
 
 ```php
-$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id);
+$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id, $code_verifier);
 ```
 
-The `$token` variable will look like the following:
+The `$token` variable will include the response from the token endpoint, such as the following:
 
 ```php
 array(
-  'me' => 'http://aaronparecki.com',
+  'me' => 'https://aaronparecki.com/',
   'access_token' => 'xxxxxxxxx',
-  'scope' => 'post'
+  'scope' => 'create'
 );
 ```
 
@@ -301,7 +305,7 @@ The response from the authorization server will be a JSON response containing th
 
 ```
 {
-  "me": "http://aaronparecki.com",
+  "me": "https://aaronparecki.com/",
   "scope": "create"
 }
 ```
@@ -310,7 +314,7 @@ The `IndieAuth\Client::verifyIndieAuthCode` method parses this and returns it as
 
 ```
 $auth = array(
-  'me' => 'http://aaronparecki.com',
+  'me' => 'https://aaronparecki.com/',
   'scope' => 'create'
 );
 ```
@@ -346,7 +350,7 @@ The example below generates a self-encoded token by encrypting all the needed in
   // Encrypt the token with your server-side encryption key
   $token = JWT::encode($token_data, $encryptionKey);
 
-  header('Content-type: application/json');  
+  header('Content-type: application/json');
   echo json_encode([
     'me' => $auth['me'],
     'scope' => $token_data['scope'],
@@ -368,7 +372,7 @@ The example below illustrates how to verify the self-encoded token we created ab
 // Verifies an access token, returning the token on success, or responding with an HTTP 400 error on failure
 function requireAccessToken($requiredScope=false) {
 
-  if(array_key_exists('HTTP_AUTHORIZATION', $_SERVER) 
+  if(array_key_exists('HTTP_AUTHORIZATION', $_SERVER)
      && preg_match('/Bearer (.+)/', $_SERVER['HTTP_AUTHORIZATION'], $match)) {
 
     // Decode the token using the encryption key
@@ -413,7 +417,7 @@ function requireAccessToken($requiredScope=false) {
 License
 -------
 
-Copyright 2013-2017 by Aaron Parecki and contributors
+Copyright 2013-2019 by Aaron Parecki and contributors
 
 Available under the MIT and Apache 2.0 licenses. See LICENSE.txt
 

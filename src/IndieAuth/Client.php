@@ -59,13 +59,15 @@ class Client {
     }
 
     $state = self::generateStateParameter();
+    $codeVerifier = self::generatePKCECodeVerifier();
 
     $_SESSION['indieauth_state'] = $state;
+    $_SESSION['indieauth_code_verifier'] = $codeVerifier;
     $_SESSION['indieauth_authorization_endpoint'] = $authorizationEndpoint;
     if($scope)
       $_SESSION['indieauth_token_endpoint'] = $tokenEndpoint;
 
-    $authorizationURL = self::buildAuthorizationURL($authorizationEndpoint, $url, self::$redirectURL, self::$clientID, $state, $scope);
+    $authorizationURL = self::buildAuthorizationURL($authorizationEndpoint, $url, self::$redirectURL, self::$clientID, $state, $scope, $codeVerifier);
 
     return [$authorizationURL, false];
   }
@@ -110,9 +112,9 @@ class Client {
     }
 
     if(isset($_SESSION['indieauth_token_endpoint'])) {
-      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID, $debug);
+      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID, $_SESSION['indieauth_code_verifier'], $debug);
     } else {
-      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID, $debug);
+      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID, $_SESSION['indieauth_code_verifier'], $debug);
     }
 
     $expectedURL = $_SESSION['indieauth_url'];
@@ -128,7 +130,7 @@ class Client {
     if(!isset($verify['me'])) {
       return [false, [
         'error' => 'indieauth_error',
-        'error_description' => 'The authorization code was not able to be verified'
+        'error_description' => 'The authorization code was not able to be verified',
       ]];
     }
 
@@ -290,13 +292,17 @@ class Client {
 
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
   public static function generateStateParameter() {
+    return self::generateRandomString(RANDOM_BYTE_COUNT);
+  }
+
+  private static function generateRandomString($numBytes) {
     if(function_exists('random_bytes')) {
-      $bytes = random_bytes(RANDOM_BYTE_COUNT);
+      $bytes = random_bytes($numBytes);
     } elseif(function_exists('openssl_random_pseudo_bytes')){
-      $bytes = openssl_random_pseudo_bytes(RANDOM_BYTE_COUNT);
+      $bytes = openssl_random_pseudo_bytes($numBytes);
     } else {
       $bytes = '';
-      for($i=0, $bytes=''; $i < RANDOM_BYTE_COUNT; $i++) {
+      for($i=0, $bytes=''; $i < $numBytes; $i++) {
         $bytes .= chr(mt_rand(0, 255));
       }
     }
@@ -304,7 +310,7 @@ class Client {
   }
 
   // Build the authorization URL for the given url and endpoint
-  public static function buildAuthorizationURL($authorizationEndpoint, $me, $redirectURI, $clientID, $state, $scope='') {
+  public static function buildAuthorizationURL($authorizationEndpoint, $me, $redirectURI, $clientID, $state, $scope='', $codeVerifier=false) {
     $url = parse_url($authorizationEndpoint);
 
     $params = array();
@@ -321,6 +327,10 @@ class Client {
       $params['response_type'] = 'code';
     } else {
       $params['response_type'] = 'id';
+    }
+    if($codeVerifier) {
+      $params['code_challenge'] = self::generatePKCECodeChallenge($codeVerifier);
+      $params['code_challenge_method'] = 'S256';
     }
 
     $url['query'] = http_build_query($params);
@@ -380,7 +390,7 @@ class Client {
   }
 
   // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
+  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $codeVerifier, $debug=false) {
     self::setUpHTTP();
 
     $response = self::$http->post($tokenEndpoint, http_build_query(array(
@@ -388,7 +398,8 @@ class Client {
       'me' => $me,
       'code' => $code,
       'redirect_uri' => $redirectURI,
-      'client_id' => $clientID
+      'client_id' => $clientID,
+      'code_verifier' => $codeVerifier,
     )), array(
       'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
     ));
@@ -412,13 +423,14 @@ class Client {
   }
 
   // Note: the $me parameter is deprecated and you can just pass null instead
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $debug=false) {
+  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $codeVerifier, $debug=false) {
     self::setUpHTTP();
 
     $response = self::$http->post($authorizationEndpoint, http_build_query(array(
       'code' => $code,
       'redirect_uri' => $redirectURI,
-      'client_id' => $clientID
+      'client_id' => $clientID,
+      'code_verifier' => $codeVerifier,
     )), array(
       'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
     ));
@@ -445,6 +457,20 @@ class Client {
     $html = self::_fetchBody($url);
     $parsed = \Mf2\parse($html, $url);
     return \Mf2\HCard\representative($parsed, $url);
+  }
+
+  /** PKCE Helpers **/
+
+  private static function generatePKCECodeVerifier() {
+    return self::generateRandomString(32);
+  }
+
+  private static function generatePKCECodeChallenge($plaintext) {
+    return self::base64_urlencode(hash('sha256', $plaintext, true));
+  }
+
+  private static function base64_urlencode($string) {
+    return rtrim(strtr(base64_encode($string), '+/', '-_'), '=');
   }
 
 }
