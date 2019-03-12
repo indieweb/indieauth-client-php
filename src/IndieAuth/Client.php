@@ -123,7 +123,7 @@ class Client {
     unset($_SESSION['indieauth_authorization_endpoint']);
     unset($_SESSION['indieauth_token_endpoint']);
 
-    if($debug) {
+    if($debug && isset($verify['auth']['me'])) {
       $verify['me'] = $verify['auth']['me'];
     }
 
