@@ -26,13 +26,15 @@ class Client {
       ]];
     }
 
+    $errorCode = false;
+
     $url = self::normalizeMeURL($url);
-    $url = self::resolveMeURL($url);
+    $url = self::resolveMeURL($url, 4, $errorCode, $errorDescription);
 
     if(!$url) {
       return [false, [
-        'error' => 'error_fetching_url',
-        'error_description' => 'There was an error fetching the profile URL when checking for redirects.'
+        'error' => ($errorCode ?: 'error_fetching_url'),
+        'error_description' => ($errorCode ? $errorDescription : 'There was an error fetching the profile URL when checking for redirects.')
       ]];
     }
 
@@ -239,7 +241,7 @@ class Client {
     return false;
   }
 
-  public static function resolveMeURL($url, $max=4) {
+  public static function resolveMeURL($url, $max=4, &$errorCode, &$errorDescription) {
     // Follow redirects and return the identity URL at the end of the chain.
     // Permanent redirects affect the identity URL, temporary redirects do not.
     // A maximum of N redirects will be followed.
@@ -251,6 +253,13 @@ class Client {
     $i = 0;
     while($i < $max) {
       $result = self::$http->head($url);
+
+      if(isset($result['error']) && $result['error']) {
+        $errorCode = $result['error'];
+        $errorDescription = $result['error_description'];
+        return false;
+      }
+
       if($result['code'] == 200) {
         break;
       } elseif($result['code'] == 301) {
