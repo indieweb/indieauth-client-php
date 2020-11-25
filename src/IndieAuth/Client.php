@@ -154,7 +154,7 @@ class Client {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     if(!isset(self::$http)) {
       self::$http = new \p3k\HTTP();
-      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 Safari/537.36 indieauth-client/0.2.5');
+      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/0.2.5');
       self::$http->_timeout = 10;
       // You can customize the user agent for your application by calling
       // IndieAuth\Client::$http->set_user_agent('Your User Agent String');
