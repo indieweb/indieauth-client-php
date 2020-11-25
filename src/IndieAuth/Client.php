@@ -331,11 +331,9 @@ class Client {
     $params['redirect_uri'] = $redirectURI;
     $params['client_id'] = $clientID;
     $params['state'] = $state;
+    $params['response_type'] = 'code';
     if($scope) {
       $params['scope'] = $scope;
-      $params['response_type'] = 'code';
-    } else {
-      $params['response_type'] = 'id';
     }
     if($codeVerifier) {
       $params['code_challenge'] = self::generatePKCECodeChallenge($codeVerifier);
