@@ -261,6 +261,10 @@ $scope = 'profile create'; // Request profile info as well as an access token wi
 $_SESSION['state'] = IndieAuth\Client::generateStateParameter();
 $_SESSION['code_verifier'] = IndieAuth\Client::generatePKCECodeVerifier();
 
+// you'll need to verify these later
+$_SESSION['user_entered_url'] = $url;
+$_SESSION['authorization_endpoint'] = $authorizationEndpoint;
+
 $authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, [
   'me' => $url,
   'redirect_uri' => $redirect_uri,
@@ -354,7 +358,6 @@ The `$response` variable will include the response from the token endpoint, such
 
 ```php
 array(
-  'me' => 'https://aaronparecki.com/',
   'response' => [
     'me' => 'https://aaronparecki.com/',
     'access_token' => 'xxxxxxxxx',
@@ -364,6 +367,22 @@ array(
   'response_code' => 200
 );
 ```
+
+
+### Verifying the Authorization Server
+
+If you are using the individual methods instead of the begin/complete wrapper, then you'll need to double check that the URL returned has the same authorization endpoint as the one you used to begin the flow.
+
+```php
+if($response['me'] != $_SESSION['user_entered_url']) {
+  $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($response['me']);
+  if($authorizationEndpoint != $_SESSION['authorization_endpoint']) {
+    echo "The authorization endpoint at the profile URL is not the same as the one used to begin the flow!";
+    die();
+  }
+}
+```
+
 
 
 ### Making API requests
