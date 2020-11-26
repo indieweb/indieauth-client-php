@@ -2,7 +2,7 @@
 namespace IndieAuth;
 
 define('RANDOM_BYTE_COUNT', 8);
-define('VERSION', '1.1.0');
+define('VERSION', '1.1.1');
 
 class Client {
 
@@ -119,7 +119,10 @@ class Client {
     }
 
     if(!isset($data['response']['me'])) {
-      return self::_errorResponse('indieauth_error', 'The authorization server did not return a valid response', $data);
+      return self::_errorResponse(
+        $data['response_details']['error'] ?? 'indieauth_error',
+        $data['response_details']['error_description'] ?? 'The authorization server did not return a valid response',
+        $data);
     }
 
     // If the returned "me" is not the same as the entered "me", check that the authorization server linked to
