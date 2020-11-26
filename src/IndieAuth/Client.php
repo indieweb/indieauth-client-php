@@ -2,7 +2,7 @@
 namespace IndieAuth;
 
 define('RANDOM_BYTE_COUNT', 8);
-define('VERSION', '1.0.1');
+define('VERSION', '1.1.0');
 
 class Client {
 
@@ -19,7 +19,9 @@ class Client {
   // Handles everything you need to start the authorization process.
   // Discovers the user's auth endpoints, generates and stores a state in the session.
   // Returns an authorization URL or an error array.
-  public static function begin($url, $scope=false) {
+  // Note: the third parameter $authorizationEndpoint is a nonstandard parameter only used
+  // when this client is used with services like indielogin.com
+  public static function begin($url, $scope=false, $authorizationEndpoint=false) {
     if(!isset(self::$clientID) || !isset(self::$redirectURL)) {
       return [false, [
         'error' => 'not_configured',
@@ -37,7 +39,8 @@ class Client {
       return self::_errorResponse('invalid_url', 'The URL provided was invalid');
     }
 
-    $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
+    if(!$authorizationEndpoint)
+      $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
 
     if(!$authorizationEndpoint) {
       return self::_errorResponse('missing_authorization_endpoint', 'Could not find your authorization endpoint');
