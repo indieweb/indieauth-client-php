@@ -2,6 +2,7 @@
 namespace IndieAuth;
 
 define('RANDOM_BYTE_COUNT', 8);
+define('VERSION', '1.0.0');
 
 class Client {
 
@@ -29,34 +30,25 @@ class Client {
     $errorCode = false;
 
     $url = self::normalizeMeURL($url);
-    $url = self::resolveMeURL($url, 4, $errorCode, $errorDescription);
+
+    $_SESSION['indieauth_entered_url'] = $url;
 
     if(!$url) {
-      return [false, [
-        'error' => ($errorCode ?: 'error_fetching_url'),
-        'error_description' => ($errorCode ? $errorDescription : 'There was an error fetching the profile URL when checking for redirects.')
-      ]];
+      return self::_errorResponse('invalid_url', 'The URL provided was invalid');
     }
-
-    $_SESSION['indieauth_url'] = $url;
 
     $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
 
     if(!$authorizationEndpoint) {
-      return [false, [
-        'error' => 'missing_authorization_endpoint',
-        'error_description' => 'Could not find your authorization endpoint'
-      ]];
+      return self::_errorResponse('missing_authorization_endpoint', 'Could not find your authorization endpoint');
     }
 
-    if($scope) {
+    $scopes = self::parseNonProfileScopes($scope);
+    if(count($scopes)) {
       $tokenEndpoint = self::discoverTokenEndpoint($url);
 
       if(!$tokenEndpoint) {
-        return [false, [
-          'error' => 'missing_token_endpoint',
-          'error_description' => 'Could not find your token endpoint'
-        ]];
+        return self::_errorResponse('missing_token_endpoint', 'Could not find your token endpoint. The token endpoint is required when requesting non-profile scopes');
       }
     }
 
@@ -66,95 +58,111 @@ class Client {
     $_SESSION['indieauth_state'] = $state;
     $_SESSION['indieauth_code_verifier'] = $codeVerifier;
     $_SESSION['indieauth_authorization_endpoint'] = $authorizationEndpoint;
-    if($scope)
+    if(isset($tokenEndpoint))
       $_SESSION['indieauth_token_endpoint'] = $tokenEndpoint;
 
-    $authorizationURL = self::buildAuthorizationURL($authorizationEndpoint, $url, self::$redirectURL, self::$clientID, $state, $scope, $codeVerifier);
+    $authorizationURL = self::buildAuthorizationURL($authorizationEndpoint, [
+      'me' => $url,
+      'redirect_uri' => self::$redirectURL,
+      'client_id' => self::$clientID,
+      'state' => $state,
+      'code_verifier' => $codeVerifier,
+      'scope' => $scope,
+    ]);
 
     return [$authorizationURL, false];
   }
 
-  public static function complete($params, $debug=false) {
-    $requiredSessionKeys = ['indieauth_url', 'indieauth_state', 'indieauth_authorization_endpoint'];
+  public static function complete($params) {
+    $requiredSessionKeys = ['indieauth_entered_url', 'indieauth_state', 'indieauth_authorization_endpoint'];
     foreach($requiredSessionKeys as $key) {
       if(!isset($_SESSION[$key])) {
-        return [false, [
-          'error' => 'invalid_session',
-          'error_description' => 'The session was missing data. Ensure that you are initializing the session before using this library'
-        ]];
+        return self::_errorResponse('invalid_session',
+          'The session was missing data. Ensure that you are initializing the session before using this library');
       }
     }
 
     if(isset($params['error'])) {
-      return [false, [
-        'error' => $params['error'],
-        'error_description' => (isset($params['error_description']) ? $params['error_description'] : '')
-      ]];
+      return self::_errorResponse($params['error'], isset($params['error_description']) ? $params['error_description'] : '');
     }
 
     if(!isset($params['code'])) {
-      return [false, [
-        'error' => 'invalid_response',
-        'error_description' => 'The response from the authorization server did not return an authorization code or error information'
-      ]];
+      return self::_errorResponse('invalid_response',
+        'The response from the authorization server did not return an authorization code or error information');
     }
 
     if(!isset($params['state'])) {
-      return [false, [
-        'error' => 'missing_state',
-        'error_description' => 'The authorization server did not return the state parameter'
-      ]];
+      return self::_errorResponse('missing_state', 'The authorization server did not return the state parameter');
     }
 
     if($params['state'] != $_SESSION['indieauth_state']) {
-      return [false, [
-        'error' => 'invalid_state',
-        'error_description' => 'The authorization server returned an invalid state parameter'
-      ]];
+      return self::_errorResponse('invalid_state', 'The authorization server returned an invalid state parameter');
     }
 
     if(isset($_SESSION['indieauth_token_endpoint'])) {
-      $verify = self::getAccessToken($_SESSION['indieauth_token_endpoint'], $params['code'], $_SESSION['indieauth_url'], self::$redirectURL, self::$clientID, $_SESSION['indieauth_code_verifier'], $debug);
+      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_token_endpoint'], [
+        'code' => $params['code'],
+        'redirect_uri' => self::$redirectURL,
+        'client_id' => self::$clientID,
+        'code_verifier' => $_SESSION['indieauth_code_verifier'],
+      ]);
     } else {
-      $verify = self::verifyIndieAuthCode($_SESSION['indieauth_authorization_endpoint'], $params['code'], null, self::$redirectURL, self::$clientID, $_SESSION['indieauth_code_verifier'], $debug);
+      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_authorization_endpoint'], [
+        'code' => $params['code'],
+        'redirect_uri' => self::$redirectURL,
+        'client_id' => self::$clientID,
+        'code_verifier' => $_SESSION['indieauth_code_verifier'],
+      ]);
     }
 
-    $expectedURL = $_SESSION['indieauth_url'];
-    unset($_SESSION['indieauth_url']);
-    unset($_SESSION['indieauth_state']);
-    unset($_SESSION['indieauth_authorization_endpoint']);
-    unset($_SESSION['indieauth_token_endpoint']);
-
-    if($debug && isset($verify['auth']['me'])) {
-      $verify['me'] = $verify['auth']['me'];
+    if(!isset($data['response']['me'])) {
+      return self::_errorResponse('indieauth_error', 'The authorization server did not return a valid response', $data);
     }
 
-    if(!isset($verify['me'])) {
-      return [false, [
-        'error' => 'indieauth_error',
-        'error_description' => 'The authorization code was not able to be verified',
-      ]];
+    // If the returned "me" is not the same as the entered "me", check that the authorization server linked to
+    // by the returned URL is the same as the one used
+    if($_SESSION['indieauth_entered_url'] != $data['response']['me']) {
+      // Go find the authorization endpoint that the returned "me" URL declares
+      $authorizationEndpoint = self::discoverAuthorizationEndpoint($data['response']['me']);
+
+      if($authorizationEndpoint != $_SESSION['indieauth_authorization_endpoint']) {
+        return self::_errorResponse('invalid_authorization_endpoint',
+          'The authorization server of the returned profile URL did not match the initial authorization server', $data);
+      }
     }
 
-    // Check that the returned URL is on the same domain as the original URL
-    if(parse_url($verify['me'], PHP_URL_HOST) != parse_url($expectedURL, PHP_URL_HOST)) {
-      return [false, [
-        'error' => 'invalid user',
-        'error_description' => 'The domain for the user returned did not match the domain of the user initially signing in'
-      ]];
-    }
+    $data['me'] = self::normalizeMeURL($data['response']['me']);
 
-    $verify['me'] = self::normalizeMeURL($verify['me']);
+    self::_clearSessionData();
 
-    return [$verify, false];
+    return [$data, false];
   }
 
+  private static function _errorResponse($error_code, $description, $debug=null) {
+    $error = [
+      'error' => $error_code,
+      'error_description' => $description,
+    ];
+    if($debug) {
+      $error['debug'] = $debug;
+    }
+    self::_clearSessionData();
+    return [false, $error];
+  }
+
+  private static function _clearSessionData() {
+    unset($_SESSION['indieauth_entered_url']);
+    unset($_SESSION['indieauth_state']);
+    unset($_SESSION['indieauth_code_verifier']);
+    unset($_SESSION['indieauth_authorization_endpoint']);
+    unset($_SESSION['indieauth_token_endpoint']);
+  }
 
   public static function setUpHTTP() {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     if(!isset(self::$http)) {
       self::$http = new \p3k\HTTP();
-      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/0.2.5');
+      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/'.VERSION);
       self::$http->_timeout = 10;
       // You can customize the user agent for your application by calling
       // IndieAuth\Client::$http->set_user_agent('Your User Agent String');
@@ -241,48 +249,6 @@ class Client {
     return false;
   }
 
-  public static function resolveMeURL($url, $max=4, &$errorCode, &$errorDescription) {
-    // Follow redirects and return the identity URL at the end of the chain.
-    // Permanent redirects affect the identity URL, temporary redirects do not.
-    // A maximum of N redirects will be followed.
-    self::setUpHTTP();
-
-    $oldmax = self::$http->_max_redirects;
-    self::$http->_max_redirects = 0;
-
-    $i = 0;
-    while($i < $max) {
-      $result = self::$http->head($url);
-
-      if(isset($result['error']) && $result['error']) {
-        $errorCode = $result['error'];
-        $errorDescription = $result['error_description'];
-        return false;
-      }
-
-      if($result['code'] == 200) {
-        break;
-      } elseif($result['code'] == 301) {
-        // Follow the permanent redirect
-        if(isset($result['headers']['Location']) && is_string($result['headers']['Location'])) {
-          $url = $result['headers']['Location'];
-        } else {
-          $url = false; // something wrong with the Location header
-        }
-      } elseif($result['code'] == 302) {
-        // Temporary redirect, so abort with the current URL
-        break;
-      } else {
-        $url = false;
-        break;
-      }
-      $i++;
-    }
-
-    self::$http->_max_redirects = $oldmax;
-    return $url;
-  }
-
   public static function discoverAuthorizationEndpoint($url) {
     return self::_discoverEndpoint($url, 'authorization_endpoint');
   }
@@ -299,48 +265,36 @@ class Client {
     return self::_discoverEndpoint($url, 'microsub');
   }
 
-  // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
-  public static function generateStateParameter() {
-    return self::generateRandomString(RANDOM_BYTE_COUNT);
-  }
-
-  private static function generateRandomString($numBytes) {
-    if(function_exists('random_bytes')) {
-      $bytes = random_bytes($numBytes);
-    } elseif(function_exists('openssl_random_pseudo_bytes')){
-      $bytes = openssl_random_pseudo_bytes($numBytes);
-    } else {
-      $bytes = '';
-      for($i=0, $bytes=''; $i < $numBytes; $i++) {
-        $bytes .= chr(mt_rand(0, 255));
+  // Build the authorization URL for the given url and endpoint
+  public static function buildAuthorizationURL($authorizationEndpoint, $params) {
+    $required = ['me', 'redirect_uri', 'client_id', 'state'];
+    foreach($required as $r) {
+      if(!isset($params[$r])) {
+        throw new \Exception('Missing parameter to buildAuthorizationURL: '.$r);
       }
     }
-    return bin2hex($bytes);
-  }
 
-  // Build the authorization URL for the given url and endpoint
-  public static function buildAuthorizationURL($authorizationEndpoint, $me, $redirectURI, $clientID, $state, $scope='', $codeVerifier=false) {
     $url = parse_url($authorizationEndpoint);
 
-    $params = array();
+    $request = array();
     if(array_key_exists('query', $url)) {
-      parse_str($url['query'], $params);
+      parse_str($url['query'], $request);
     }
 
-    $params['me'] = $me;
-    $params['redirect_uri'] = $redirectURI;
-    $params['client_id'] = $clientID;
-    $params['state'] = $state;
-    $params['response_type'] = 'code';
-    if($scope) {
-      $params['scope'] = $scope;
+    $request['response_type'] = 'code';
+    $request['me'] = $params['me'];
+    $request['redirect_uri'] = $params['redirect_uri'];
+    $request['client_id'] = $params['client_id'];
+    $request['state'] = $params['state'];
+    if(!empty($params['scope'])) {
+      $request['scope'] = $params['scope'];
     }
-    if($codeVerifier) {
-      $params['code_challenge'] = self::generatePKCECodeChallenge($codeVerifier);
-      $params['code_challenge_method'] = 'S256';
+    if(isset($params['code_verifier'])) {
+      $request['code_challenge'] = self::generatePKCECodeChallenge($params['code_verifier']);
+      $request['code_challenge_method'] = 'S256';
     }
 
-    $url['query'] = http_build_query($params);
+    $url['query'] = http_build_query($request);
 
     return self::build_url($url);
   }
@@ -396,74 +350,73 @@ class Client {
     return "$scheme$user$pass$host$port$path$query$fragment";
   }
 
-  // Used by clients to get an access token given an auth code
-  public static function getAccessToken($tokenEndpoint, $code, $me, $redirectURI, $clientID, $codeVerifier, $debug=false) {
-    self::setUpHTTP();
-
-    $response = self::$http->post($tokenEndpoint, http_build_query(array(
-      'grant_type' => 'authorization_code',
-      'me' => $me,
-      'code' => $code,
-      'redirect_uri' => $redirectURI,
-      'client_id' => $clientID,
-      'code_verifier' => $codeVerifier,
-    )), array(
-      'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
-    ));
-
-    $auth = json_decode($response['body'], true);
-    if(!$auth) {
-      // Parse as form-encoded for fallback support
-      $auth = array();
-      parse_str($response['body'], $auth);
-    }
-
-    if($debug) {
-      return array(
-        'auth' => $auth,
-        'response' => $response['body'],
-        'response_code' => $response['code']
-      );
-    } else {
-      return $auth;
-    }
+  public static function parseNonProfileScopes($scope) {
+    $scopes = explode(' ', $scope);
+    return array_filter(array_diff($scopes, ['profile','email']));
   }
 
-  // Note: the $me parameter is deprecated and you can just pass null instead
-  public static function verifyIndieAuthCode($authorizationEndpoint, $code, $me, $redirectURI, $clientID, $codeVerifier, $debug=false) {
+  public static function exchangeAuthorizationCode($endpoint, $params) {
+    $required = ['code', 'redirect_uri', 'client_id'];
+    foreach($required as $r) {
+      if(!isset($params[$r])) {
+        throw new \Exception('Missing parameter to exchangeAuthorizationCode: '.$r);
+      }
+    }
+
     self::setUpHTTP();
 
-    $response = self::$http->post($authorizationEndpoint, http_build_query(array(
-      'code' => $code,
-      'redirect_uri' => $redirectURI,
-      'client_id' => $clientID,
-      'code_verifier' => $codeVerifier,
-    )), array(
+    $request = [
+      'grant_type' => 'authorization_code',
+      'code' => $params['code'],
+      'redirect_uri' => $params['redirect_uri'],
+      'client_id' => $params['client_id'],
+    ];
+    if(isset($params['code_verifier'])) {
+      $request['code_verifier'] = $params['code_verifier'];
+    }
+
+    $response = self::$http->post($endpoint, http_build_query($request), [
       'Accept: application/json, application/x-www-form-urlencoded;q=0.8'
-    ));
+    ]);
 
-    $auth = json_decode($response['body'], true);
-    if(!$auth) {
-      // Parse as form-encoded for fallback support
-      $auth = array();
-      parse_str($response['body'], $auth);
+    $data = json_decode($response['body'], true);
+    if(!$data) {
+      // Parse as form-encoded for legacy server support
+      $data = array();
+      parse_str($response['body'], $data);
     }
 
-    if($debug) {
-      return array(
-        'auth' => $auth,
-        'response' => $response['body'],
-        'response_code' => $response['code']
-      );
-    } else {
-      return $auth;
-    }
+    return [
+      'response' => $data,
+      'raw_response' => $response['body'],
+      'response_code' => $response['code']
+    ];
   }
 
   public static function representativeHCard($url) {
     $html = self::_fetchBody($url);
     $parsed = \Mf2\parse($html, $url);
     return \Mf2\HCard\representative($parsed, $url);
+  }
+
+  // Support legacy PHP random string generation methods
+  private static function generateRandomString($numBytes) {
+    if(function_exists('random_bytes')) {
+      $bytes = random_bytes($numBytes);
+    } elseif(function_exists('openssl_random_pseudo_bytes')){
+      $bytes = openssl_random_pseudo_bytes($numBytes);
+    } else {
+      $bytes = '';
+      for($i=0, $bytes=''; $i < $numBytes; $i++) {
+        $bytes .= chr(mt_rand(0, 255));
+      }
+    }
+    return bin2hex($bytes);
+  }
+
+  // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
+  public static function generateStateParameter() {
+    return self::generateRandomString(RANDOM_BYTE_COUNT);
   }
 
   /** PKCE Helpers **/

@@ -67,15 +67,23 @@ if($error) {
 
 ```
 
-### Handling the Callback
+The following scopes have special meaning to the authorization server and will request the user's full profile info instead of just verifying their profile URL:
 
-In your callback file, you just need to pass all the query string parameters to the library and it will take care of things! It will use the authorization or token endpoint it found in the initial step, and will check the authorization code or exchange it for an access token as appropriate.
+* `profile`
+* `email`
 
-The result will be the response from the authorization endpoint, which will contain the user's final `me` URL as well as the access token if you requested one or more scopes.
+Any other scopes requested are assumed to be scopes that will request an access token be returned and the library will request an access token from the token endpoint in the next step.
+
+
+### Handling the Redirect
+
+In your redirect file, you just need to pass all the query string parameters to the library and it will take care of things! It will use the authorization or token endpoint it found in the initial step, and will use the authorization code to verify the profile information or get an access token depending on whether you've requested any scopes.
+
+The result will be the response from the authorization endpoint or token, which will contain the user's final `me` URL as well as the access token if you requested one or more scopes.
 
 If there were any problems, the error information will be returned to you as well.
 
-The library takes care of canonicalizing the user's URL, as well as checking that the final URL is on the same domain as the entered URL.
+The library takes care of verifying the final returned profile URL has the same authorization endpoint as the entered URL.
 
 Example `redirect.php` file:
 
@@ -85,20 +93,29 @@ session_start();
 IndieAuth\Client::$clientID = 'https://example.com/';
 IndieAuth\Client::$redirectURL = 'https://example.com/redirect.php';
 
-list($user, $error) = IndieAuth\Client::complete($_GET);
+list($response, $error) = IndieAuth\Client::complete($_GET);
 
 if($error) {
   echo "<p>Error: ".$error['error']."</p>";
   echo "<p>".$error['error_description']."</p>";
 } else {
   // Login succeeded!
-  // If you requested a scope, then there will be an access token in the response.
-  // Otherwise there will just be the user's URL.
-  echo "URL: ".$user['me']."<br>";
-  if(isset($user['access_token'])) {
-    echo "Access Token: ".$user['access_token']."<br>";
-    echo "Scope: ".$user['scope']."<br>";
+  // The library will return the user's profile URL in the property "me"
+  // It will also return the full response from the authorization or token endpoint, as well as debug info
+  echo "URL: ".$response['me']."<br>";
+  if(isset($response['response']['access_token'])) {
+    echo "Access Token: ".$response['response']['access_token']."<br>";
+    echo "Scope: ".$response['response']['scope']."<br>";
   }
+
+  // The full parsed response from the endpoint will be available as:
+  // $response['response']
+
+  // The raw response:
+  // $response['raw_response']
+
+  // The HTTP response code:
+  // $response['response_code']
 
   // You'll probably want to save the user's URL in the session
   $_SESSION['user'] = $user['me'];
@@ -110,7 +127,7 @@ if($error) {
 Detailed Usage for Clients
 --------------------------
 
-The first thing an IndieAuth client needs to do is to prompt the user to enter their web address. This is the basis of IndieAuth, requiring each person to have their own website. A typical IndieAuth sign-in form may look something like the following.
+The first thing an IndieAuth client needs to do is to prompt the user to enter their web address. This is the basis of IndieAuth, where user identifiers are URLs. A typical IndieAuth sign-in form may look something like the following.
 
 ```
 Your URL: [ example.com ]
@@ -118,20 +135,23 @@ Your URL: [ example.com ]
        [ Sign In ]
 ```
 
-This form will make a GET or POST request to your app's server, at which point you can begin the IndieAuth discovery.
+This form will make a POST request to your app's server, at which point you can begin the IndieAuth discovery.
 
 ### Discovering the required endpoints
 
-The user will need to define three endpoints for their URL before a client can perform authorization. Endpoints can be specified by either an HTTP `Link` header or by using `<link>` tags in the HTML head.
+The user will need to define up to four endpoints for their URL before a client can perform authorization. Endpoints can be specified by either an HTTP `Link` header or by using `<link>` tags in the HTML head.
+
+These discovery methods can be run all sequentially and the library will avoid making duplicate HTTP requests if it has already fetched the page once.
+
 
 #### Authorization Endpoint
 
 ```html
-<link rel="authorization_endpoint" href="https://indieauth.com/auth">
+<link rel="authorization_endpoint" href="https://example.com/auth">
 ```
 
 ```
-Link: <https://indieauth.com/auth>; rel="authorization_endpoint"
+Link: <https://example.com/auth>; rel="authorization_endpoint"
 ```
 
 The authorization endpoint allows a website to specify the location to direct the user's browser to when performing the initial authorization request.
@@ -141,6 +161,7 @@ Since this can be a full URL, this allows a website to use an external auth serv
 The following function will fetch the user's home page and return the authorization endpoint, or `false` if none was found.
 
 ```php
+// Normalize whatever the user entered to be a URL, e.g. "example.com" to "http://example.com/"
 $url = IndieAuth\Client::normalizeMeURL($url);
 $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($url);
 ```
@@ -148,16 +169,16 @@ $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($url);
 #### Token Endpoint
 
 ```html
-<link rel="token_endpoint" href="https://aaronparecki.com/api/token">
+<link rel="token_endpoint" href="https://example.com/token">
 ```
 
 ```
-Link: <https://aaronparecki.com/api/token>; rel="token_endpoint"
+Link: <https://example.com/token>; rel="token_endpoint"
 ```
 
-The token endpoint is where API clients will request access tokens. This will typically be a URL on the user's own website, although this can technically be delegated to an external service as well.
+The token endpoint is where API clients will request access tokens. This will typically be a URL on the user's own website, although this can delegated to an external service as well.
 
-The token endpoint is responsible for verifying the authorization code and generating an access token.
+The token endpoint is responsible for issuing an access token.
 
 The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
 
@@ -169,23 +190,44 @@ $tokenEndpoint = IndieAuth\Client::discoverTokenEndpoint($url);
 #### Micropub Endpoint
 
 ```html
-<link rel="micropub" href="https://aaronparecki.com/api/post">
+<link rel="micropub" href="https://example.com/micropub">
 ```
 
 ```
-Link: <https://aaronparecki.com/api/post>; rel="micropub"
+Link: <https://example.com/micropub>; rel="micropub"
 ```
 
-The [micropub](http://indiewebcamp.com/micropub) endpoint defines where API clients will make POST requests to create new posts on the user's website. When an API client makes a request, the request will contain the previously-issued access token in the header, and the micropub endpoint will be able to validate the request given that access token.
+The [Micropub](https://indieweb.org/Micropub) endpoint defines where Micropub clients will make POST requests to create new posts on the user's website. When a Micropub client makes a request, the request will contain the previously-issued access token in the header, and the micropub endpoint will be able to validate the request given that access token.
 
-The following function will fetch the user's home page and return the token endpoint, or `false` if none was found.
+The following function will fetch the user's home page and return the Micropub endpoint, or `false` if none was found.
 
 ```php
 $url = IndieAuth\Client::normalizeMeURL($url);
 $micropubEndpoint = IndieAuth\Client::discoverMicropubEndpoint($url);
 ```
 
-The client may wish to discover all three endpoints at the beginning, and cache the values in a session for later use.
+The client may wish to discover all endpoints at the beginning, and cache the values in a session for later use.
+
+#### Microsub Endpoint
+
+```html
+<link rel="microsub" href="https://example.com/microsub">
+```
+
+```
+Link: <https://example.com/microsub>; rel="microsub"
+```
+
+The [Microsub](https://indieweb.comorg/Microsub) endpoint is for [readers](https://indieweb.org/reader). When a Micropub client makes a request, the request will contain the previously-issued access token in the header, and the endpoint will be able to validate the request given that access token.
+
+The following function will fetch the user's home page and return the Microsub endpoint, or `false` if none was found.
+
+```php
+$url = IndieAuth\Client::normalizeMeURL($url);
+$microsubEndpoint = IndieAuth\Client::discoverMicrosubEndpoint($url);
+```
+
+The client may wish to discover all endpoints at the beginning, and cache the values in a session for later use.
 
 
 ### Building the authorization URL
@@ -194,8 +236,8 @@ Once the client has discovered the authorization server, it will need to build t
 
 For web sites, the client should send a 301 redirect to the authorization URL, or can open a new browser window. Native apps must launch a native browser window to the autorization URL and handle the redirect back to the native app appropriately.
 
-#### Authorization URL Parameters
-* `me` - the user's URL.
+#### Authorization Endpoint Parameters
+* `me` - the URL the user entered to begin the flow.
 * `redirect_uri` - where the authorization server should redirect after authorization is complete.
 * `client_id` - the full URL to a web page of the application. This is used by the authorization server to discover the app's name and icon, and to validate the redirect URI.
 * `state` - the "state" parameter can be whatever the client wishes, and must also be sent to the token endpoint when the client exchanges the authorization code for an access token.
@@ -205,12 +247,31 @@ For web sites, the client should send a 301 redirect to the authorization URL, o
 
 The following function will build the authorization URL given all the required parameters. If the authorization endpoint contains a query string, this function handles merging the existing query string parameters with the new parameters.
 
+The following scopes have special meaning to the authorization server and will request the user's full profile info instead of just verifying their profile URL:
+
+* `profile`
+* `email`
+
 ```php
 $url = IndieAuth\Client::normalizeMeURL($url);
-$authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, $url, $redirect_uri, $client_id, $state, $scope, $code_verifier);
+
+$scope = 'profile create'; // Request profile info as well as an access token with the "create" scope
+
+// These are two random strings. The helper methods in the library will use an available random number generaton depending on the PHP version.
+$_SESSION['state'] = IndieAuth\Client::generateStateParameter();
+$_SESSION['code_verifier'] = IndieAuth\Client::generatePKCECodeVerifier();
+
+$authorizationURL = IndieAuth\Client::buildAuthorizationURL($authorizationEndpoint, [
+  'me' => $url,
+  'redirect_uri' => $redirect_uri,
+  'client_id' => $client_id,
+  'scope' => $scope,
+  'state' => $_SESSION['state'],
+  'code_verifier' => $_SESSION['code_verifier'],
+]);
 ```
 
-Note: Your code should include the plaintext random secret, the `IndieAuth\Client` library will deal with hashing it for you.
+Note: Your code should include the plaintext random code verifier, the `IndieAuth\Client` library will deal with hashing it for you in the request.
 
 ### Getting authorization from the user
 
@@ -225,15 +286,50 @@ This application would like to be able to
 [ Approve ]   [ Deny ]
 ```
 
-If the user approves the request, the authorization server will redirect back to the redirect URI specified, with the following parameters added to the query string:
+If the user approves the request, the authorization server will redirect back to the redirect URL specified, with the following parameters added to the query string:
 
 * `code` - the authorization code
 * `state` - the state value provided in the request
 
 
+### Exchanging the authorization code for profile info
+
+If the client is not trying to get an access token, just trying to verify the user's URL, then it will need to exchange the authorization code for profile information at the authorization endpoint.
+
+The following function will make a POST request to the authorization endpoint and parse the result.
+
+```php
+$response = IndieAuth\Client::exchangeAuthorizationCode($authorizationEndpoint, [
+  'code' => $_GET['code'],
+  'redirect_uri' => $redirect_uri,
+  'client_id' => $client_id,
+  'code_verifier' => $_SESSION['code_verifier'],
+]);
+```
+
+The `$response` variable will include the response from the endpoint, such as the following:
+
+```php
+array(
+  'me' => 'https://aaronparecki.com/',
+  'response' => [
+    'me' => 'https://aaronparecki.com/',
+    'profile' => [
+      'name' => 'Aaron Parecki',
+      'url' => 'https://aaronparecki.com/',
+      'photo' => 'https://aaronparecki.com/images/profile.jpg'
+    ]
+  ],
+  'raw_response' => '{"me":"https://aaronparecki.com/","profile":{"name":"Aaron Parecki","url":"https://aaronparecki.com/","photo":"https://aaronparecki.com/images/profile.jpg"}}',
+  'response_code' => 200
+);
+```
+
+
+
 ### Exchanging the authorization code for an access token
 
-Now that the client has obtained an authorization code, it needs to exchange it for an access token at the token endpoint.
+If the client requested any scopes beyond profile scopes and is expecting an access token, it needs to exchange the authorization code for an access token at the token endpoint.
 
 To get an access token, the client makes a POST request to the token endpoint, passing in the authorization code as well as the following parameters:
 
@@ -246,16 +342,26 @@ To get an access token, the client makes a POST request to the token endpoint, p
 The following function will make a POST request to the token endpoint and parse the result.
 
 ```php
-$token = IndieAuth\Client::getAccessToken($tokenEndpoint, $_GET['code'], $_GET['me'], $redirect_uri, $client_id, $code_verifier);
+$response = IndieAuth\Client::exchangeAuthorizationCode($tokenEndpoint, [
+  'code' => $_GET['code'],
+  'redirect_uri' => $redirect_uri,
+  'client_id' => $client_id,
+  'code_verifier' => $_SESSION['code_verifier'],
+]);
 ```
 
-The `$token` variable will include the response from the token endpoint, such as the following:
+The `$response` variable will include the response from the token endpoint, such as the following:
 
 ```php
 array(
   'me' => 'https://aaronparecki.com/',
-  'access_token' => 'xxxxxxxxx',
-  'scope' => 'create'
+  'response' => [
+    'me' => 'https://aaronparecki.com/',
+    'access_token' => 'xxxxxxxxx',
+    'scope' => 'create'
+  ],
+  'raw_response' => '{"me":"https://aaronparecki.com/","access_token":"xxxxxxxxx","scope":"create"}',
+  'response_code' => 200
 );
 ```
 
@@ -272,152 +378,11 @@ Authorization: Bearer xxxxxxxx
 
 
 
-Usage for Token Endpoints
--------------------------
-
-When issuing access tokens, you will need to verify the authorization code present in the request. In order to verify the authorization code, you'll first need to discover the user's auth server.
-
-### Discovering the authorization endpoint
-
-Requests to your token endpoint will contain the following parameters:
-* me
-* code
-* client_id
-* redirect_uri
-
-You will need to verify the code with the user's authorization server, and then create an access token for them.
-
-First, discover the user's authorization server by looking for a `rel="authorization_server"` link on their home page.
-
-```php
-$authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($_POST['me']);
-```
-
-If discovery is successful, `$authorizationEndpoint` will be the full URL, such as `https://indieauth.com/auth`. Now you need to verify the auth code with the auth server. To do this, you'll need to pass in all the parameters that were part of generating the auth code, including `redirect_uri` and `client_id`.
-
-### Verifying the authorization code
-
-```php
-$auth = IndieAuth\Client::verifyIndieAuthCode($authorizationEndpoint, $_POST['code'], $_POST['me'], $_POST['redirect_uri'], $_POST['client_id']);
-```
-
-The response from the authorization server will be a JSON response containing the `me` parameter and more importantly, the `scope` parameter which is the list of scopes that was part of the authorization request.
-
-```
-{
-  "me": "https://aaronparecki.com/",
-  "scope": "create"
-}
-```
-
-The `IndieAuth\Client::verifyIndieAuthCode` method parses this and returns it as an array:
-
-```
-$auth = array(
-  'me' => 'https://aaronparecki.com/',
-  'scope' => 'create'
-);
-```
-
-If there was an error, the authorization server will return an HTTP 400 response with `error=invalid_request` and the `error_description` property indicating what went wrong. Errors may include:
-
-* Missing 'code' parameter - the request did not include the "code" parameter
-* Invalid code provided - could be because the code was not created at this authorization server, or just a bad code was provided
-* The auth code has expired - Authorization codes are only valid for a short time
-* The 'redirect_uri' parameter did not match
-
-The error messages are meant to be read by developers, not by end users. Your token endpoint can pass this error through for debugging purposes, or you can return your own error.
-
-### Issuing an access token
-
-Assuming you get a successful response from the auth server containing the "me" and "scope" parameters, you can now generate an access token and send the reply.
-
-The way you build an access token is entirely up to you. You may want to store tokens in a database, or you may want to use self-encoded tokens to avoid the need for a database. In either case, you must store at least the "me," "scope" and "client_id" values.
-
-The example below generates a self-encoded token by encrypting all the needed information into a string and returning the encrypted string. This example uses a [JWT](https://github.com/firebase/php-jwt) library to encrypt the token, but you could use any method of encryption you wish.
-
-```php
-  // $auth is set from the IndieAuth\Client::verifyIndieAuthCode call from before
-
-  $token_data = array(
-    'date_issued' => date('Y-m-d H:i:s'),
-    'me' => $auth['me'],
-    'client_id' => $_POST['client_id'],
-    'scope' => array_key_exists('scope', $auth) ? $auth['scope'] : '',
-    'nonce' => mt_rand(1000000,pow(2,31))   // add some noise to the encrypted version
-  );
-
-  // Encrypt the token with your server-side encryption key
-  $token = JWT::encode($token_data, $encryptionKey);
-
-  header('Content-type: application/json');
-  echo json_encode([
-    'me' => $auth['me'],
-    'scope' => $token_data['scope'],
-    'access_token' => $token
-  ]);
-```
-
-Note that you must return the parameters "me", "scope" and "access_token" in your response. This is because API clients will not know the user or scope of the token otherwise, and clients will need to discover the API endpoint using the "me" parameter before they can make API requests.
-
-### Verifying access tokens
-
-Verifying access tokens is not actually part of this library, since the token was generated by your own server. You will need to verify tokens using whatever method you wish.
-
-For example, your API endpoint to create new posts may wish to require a "create" scope, so you would need to verify that the access token is valid and also contains the needed scope value.
-
-The example below illustrates how to verify the self-encoded token we created above.
-
-```php
-// Verifies an access token, returning the token on success, or responding with an HTTP 400 error on failure
-function requireAccessToken($requiredScope=false) {
-
-  if(array_key_exists('HTTP_AUTHORIZATION', $_SERVER)
-     && preg_match('/Bearer (.+)/', $_SERVER['HTTP_AUTHORIZATION'], $match)) {
-
-    // Decode the token using the encryption key
-    $token = JWT::decode($match[1], $encryptionKey);
-
-    if($token) {
-      // This is where you could add additional validations on specific client_ids. For example
-      // to revoke all tokens generated by app 'http://example.com', do something like this:
-      // if($token->client_id == 'http://example.com' && strtotime($token->date) <= strtotime('2013-12-21')) // revoked
-
-      // Verify the token has the required scope
-      if($requiredScope) {
-        if(property_exists($token, 'scope') && in_array($requiredScope, explode(' ', $token->scope))) {
-          return $token;
-        } else {
-          header('HTTP/1.1 401 Unauthorized');
-          header('Content-type: application/json');
-          echo json_encode([
-            'error' => 'invalid_scope',
-            'error_description' => 'The token provided does not have the necessary scope'
-          ]);
-          die();
-        }
-      } else {
-        return $token;
-      }
-    }
-  }
-
-  header('HTTP/1.1 401 Unauthorized');
-  header('Content-type: application/json');
-  echo json_encode([
-    'error' => 'unauthorized',
-    'error_description' => 'An access token is required. Send an HTTP Authorization header such as \'Authorization: Bearer xxxxxx\''
-  ]);
-  die();
-}
-```
-
-
 
 License
 -------
 
-Copyright 2013-2019 by Aaron Parecki and contributors
+Copyright 2013-2020 by Aaron Parecki and contributors
 
 Available under the MIT and Apache 2.0 licenses. See LICENSE.txt
 
