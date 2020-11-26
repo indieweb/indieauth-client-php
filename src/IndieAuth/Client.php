@@ -421,7 +421,7 @@ class Client {
 
   /** PKCE Helpers **/
 
-  private static function generatePKCECodeVerifier() {
+  public static function generatePKCECodeVerifier() {
     return self::generateRandomString(32);
   }
 
