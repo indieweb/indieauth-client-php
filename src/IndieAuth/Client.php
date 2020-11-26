@@ -2,7 +2,7 @@
 namespace IndieAuth;
 
 define('RANDOM_BYTE_COUNT', 8);
-define('VERSION', '1.1.1');
+define('VERSION', '1.1.3');
 
 class Client {
 
@@ -395,7 +395,7 @@ class Client {
     return [
       'response' => $data,
       'raw_response' => $response['body'],
-      'response_code' => $response['code']
+      'response_code' => $response['code'],
       'response_details' => $response,
     ];
   }

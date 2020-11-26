@@ -2,7 +2,7 @@
   "name": "indieauth/client",
   "description": "IndieAuth Client Library",
   "require": {
-    "php": ">5.3.0",
+    "php": ">5.6.0",
     "mf2/mf2": ">=0.3.2",
     "p3k/http": ">=0.1.6",
     "indieweb/representative-h-card": "^0.1.2"
@@ -15,6 +15,12 @@
     {
       "name": "Aaron Parecki",
       "homepage": "https://aaronparecki.com"
+    }
+  ],
+  "funding": [
+    {
+      "type": "opencollective",
+      "url": "https://opencollective.com/indieweb"
     }
   ],
   "autoload": {
