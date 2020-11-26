@@ -396,6 +396,7 @@ class Client {
       'response' => $data,
       'raw_response' => $response['body'],
       'response_code' => $response['code']
+      'response_details' => $response,
     ];
   }
 
