@@ -2,7 +2,7 @@
 namespace IndieAuth;
 
 define('RANDOM_BYTE_COUNT', 8);
-define('VERSION', '1.0.0');
+define('VERSION', '1.0.1');
 
 class Client {
 
