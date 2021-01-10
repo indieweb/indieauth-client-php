@@ -40,7 +40,7 @@ class Client {
     }
 
     if(!$authorizationEndpoint)
-      $authorizationEndpoint = self::discoverAuthorizationEndpoint($url);
+      $authorizationEndpoint = static::discoverAuthorizationEndpoint($url);
 
     if(!$authorizationEndpoint) {
       return self::_errorResponse('missing_authorization_endpoint', 'Could not find your authorization endpoint');
@@ -48,7 +48,7 @@ class Client {
 
     $scopes = self::parseNonProfileScopes($scope);
     if(count($scopes)) {
-      $tokenEndpoint = self::discoverTokenEndpoint($url);
+      $tokenEndpoint = static::discoverTokenEndpoint($url);
 
       if(!$tokenEndpoint) {
         return self::_errorResponse('missing_token_endpoint', 'Could not find your token endpoint. The token endpoint is required when requesting non-profile scopes');
@@ -138,7 +138,7 @@ class Client {
     // by the returned URL is the same as the one used
     if($_SESSION['indieauth_entered_url'] != $data['response']['me']) {
       // Go find the authorization endpoint that the returned "me" URL declares
-      $authorizationEndpoint = self::discoverAuthorizationEndpoint($data['response']['me']);
+      $authorizationEndpoint = static::discoverAuthorizationEndpoint($data['response']['me']);
 
       if($authorizationEndpoint != $_SESSION['indieauth_authorization_endpoint']) {
         return self::_errorResponse('invalid_authorization_endpoint',
