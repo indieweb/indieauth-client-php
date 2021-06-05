@@ -9,7 +9,7 @@ This is a simple library to help with IndieAuth. There are two ways you may want
 Quick Start
 -----------
 
-If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed-usage-for-clients-detailed) below.
+If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed-usage-for-clients) below.
 
 ### Create a Login Form
 
