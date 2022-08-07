@@ -47,6 +47,8 @@ class Client {
       if (!($issuer && self::_isIssuerValid($issuer, $metadataEndpoint))) {
         return self::_errorResponse('invalid_issuer', 'Issuer in metadata endpoint is not valid');
       }
+
+      $_SESSION['indieauth_issuer'] = $issuer;
     }
 
     if(!$authorizationEndpoint) {
@@ -111,6 +113,16 @@ class Client {
 
     if($params['state'] != $_SESSION['indieauth_state']) {
       return self::_errorResponse('invalid_state', 'The authorization server returned an invalid state parameter');
+    }
+
+    if (isset($_SESSION['indieauth_issuer'])) {
+      if (!isset($params['iss'])) {
+        return self::_errorResponse('missing_iss', 'The authorization server did not return the iss parameter');
+      }
+
+      if ($params['iss'] !== $_SESSION['indieauth_issuer']) {
+        return self::_errorResponse('invalid_iss', 'The authorization server return an invalid iss parameter');
+      }
     }
 
     if(isset($_SESSION['indieauth_token_endpoint'])) {
@@ -182,6 +194,7 @@ class Client {
     unset($_SESSION['indieauth_code_verifier']);
     unset($_SESSION['indieauth_authorization_endpoint']);
     unset($_SESSION['indieauth_token_endpoint']);
+    unset($_SESSION['indieauth_issuer']);
   }
 
   public static function setUpHTTP() {
