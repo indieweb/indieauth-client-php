@@ -53,7 +53,7 @@ class MetadataTest extends IndieAuthTestCase {
   }
 
   public function testIsIssuerValid() {
-  	# scheme must be https
+    # scheme must be https
     $result = $this->_invokeStaticMethod(
       IndieAuth\Client::class,
       '_isIssuerValid',
@@ -62,7 +62,7 @@ class MetadataTest extends IndieAuthTestCase {
 
     $this->assertFalse($result);
 
-  	# no query string allowed
+    # no query string allowed
     $result = $this->_invokeStaticMethod(
       IndieAuth\Client::class,
       '_isIssuerValid',
@@ -71,7 +71,7 @@ class MetadataTest extends IndieAuthTestCase {
 
     $this->assertFalse($result);
 
-  	# no fragment allowed
+    # no fragment allowed
     $result = $this->_invokeStaticMethod(
       IndieAuth\Client::class,
       '_isIssuerValid',
@@ -80,7 +80,7 @@ class MetadataTest extends IndieAuthTestCase {
 
     $this->assertFalse($result);
 
-  	# issuer must be prefix of metadata endpoint
+    # issuer must be prefix of metadata endpoint
     $result = $this->_invokeStaticMethod(
       IndieAuth\Client::class,
       '_isIssuerValid',
@@ -89,7 +89,7 @@ class MetadataTest extends IndieAuthTestCase {
 
     $this->assertFalse($result);
 
-  	# valid issuer
+    # valid issuer
     $result = $this->_invokeStaticMethod(
       IndieAuth\Client::class,
       '_isIssuerValid',
