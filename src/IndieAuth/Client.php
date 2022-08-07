@@ -121,7 +121,7 @@ class Client {
       }
 
       if ($params['iss'] !== $_SESSION['indieauth_issuer']) {
-        return self::_errorResponse('invalid_iss', 'The authorization server return an invalid iss parameter');
+        return self::_errorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
       }
     }
 
