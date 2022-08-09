@@ -157,9 +157,12 @@ class Client {
       return self::_errorResponse($error, $error_description, $data);
     }
 
-    // If the returned "me" is not the same as the entered "me", check that the authorization server linked to
+    // If the returned "me" is not the same as the entered "me", check that the authorization endpoint linked to
     // by the returned URL is the same as the one used
     if($_SESSION['indieauth_entered_url'] != $data['response']['me']) {
+      // Discover and populate metadata if the returned "me" has a metadata endpoint
+      $metadataEndpoint = self::discoverMetadataEndpoint($data['response']['me']);
+
       // Go find the authorization endpoint that the returned "me" URL declares
       $authorizationEndpoint = static::discoverAuthorizationEndpoint($data['response']['me']);
 
