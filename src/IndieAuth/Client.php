@@ -290,12 +290,19 @@ class Client {
     }
   }
 
+  private static function resetMetadata() {
+    self::$_metadata_body = array();
+    self::$_metadata = null;
+  }
+
   /**
    * Set metadata body
    * $body is expected to be JSON and will attempt
    * to decode to array in self::$_metadata
    */
   public static function setMetadata($url, $body) {
+    self::resetMetadata();
+
     self::$_metadata_body[$url] = $body;
     $metadata_array = json_decode($body, true);
     if (!is_null($metadata_array)) {
@@ -383,6 +390,18 @@ class Client {
     return self::_discoverEndpoint($url, 'token_endpoint');
   }
 
+  public static function discoverRevocationEndpoint($url) {
+    return self::_discoverEndpoint($url, 'revocation_endpoint');
+  }
+
+  public static function discoverIntrospectionEndpoint($url) {
+    return self::_discoverEndpoint($url, 'introspection_endpoint');
+  }
+
+  public static function discoverUserinfoEndpoint($url) {
+    return self::_discoverEndpoint($url, 'userinfo_endpoint');
+  }
+
   public static function discoverMicropubEndpoint($url) {
     return self::_discoverEndpoint($url, 'micropub');
   }
@@ -464,7 +483,7 @@ class Client {
   }
 
   public static function build_url($parsed_url) {
-    $scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
+    $scheme   = isset($parsed_url['scheme']) ? strtolower($parsed_url['scheme']) . '://' : '';
     $host     = isset($parsed_url['host']) ? strtolower($parsed_url['host']) : '';
     $port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
     $user     = isset($parsed_url['user']) ? $parsed_url['user'] : '';
