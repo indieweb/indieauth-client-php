@@ -2,7 +2,9 @@
 const TESTING = true;
 require __DIR__ . '/../vendor/autoload.php';
 
-class IndieAuthTestCase extends PHPUnit_Framework_TestCase {
+use Yoast\PHPUnitPolyfills\TestCases\TestCase;
+
+class IndieAuthTestCase extends TestCase {
 
   protected function _invokeMethod(&$object, $methodName, $params=[]) {
     $reflection = new \ReflectionClass(get_class($object));

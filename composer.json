@@ -7,9 +7,6 @@
     "p3k/http": "^0.1",
     "indieweb/representative-h-card": "^0.1.2"
   },
-  "require-dev": {
-    "phpunit/phpunit": "4.8.*"
-  },
   "license": "Apache-2.0",
   "authors": [
     {
@@ -27,5 +24,8 @@
     "psr-0": {
       "IndieAuth": "src/"
     }
+  },
+  "require-dev": {
+    "yoast/phpunit-polyfills": "^1.0"
   }
 }
