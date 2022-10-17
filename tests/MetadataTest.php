@@ -10,7 +10,7 @@ class MetadataTest extends IndieAuthTestCase {
     Client::setMetadata('https://example.com/', $this->default_metadata);
     $metadata = Client::getMetadata();
 
-    $this->assertInternalType('array', $metadata);
+    $this->assertIsArray($metadata);
     $this->assertArrayHasKey('issuer', $metadata);
     $this->assertArrayHasKey('authorization_endpoint', $metadata);
     $this->assertArrayHasKey('token_endpoint', $metadata);
