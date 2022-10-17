@@ -10,6 +10,8 @@ class Client {
   private static $_body = array();
   private static $_parsed = null;
   private static $_parsedHash = null;
+  private static $_metadata_body = array();
+  private static $_metadata = null;
 
   public static $http;
 
@@ -39,8 +41,19 @@ class Client {
       return self::_errorResponse('invalid_url', 'The URL provided was invalid');
     }
 
-    if(!$authorizationEndpoint)
+    $metadataEndpoint = self::discoverMetadataEndpoint($url);
+    if ($metadataEndpoint) {
+      $issuer = self::_discoverFromMetadata('issuer');
+      if (!($issuer && self::_isIssuerValid($issuer, $metadataEndpoint))) {
+        return self::_errorResponse('invalid_issuer', 'Issuer in metadata endpoint is not valid');
+      }
+
+      $_SESSION['indieauth_issuer'] = $issuer;
+    }
+
+    if(!$authorizationEndpoint) {
       $authorizationEndpoint = static::discoverAuthorizationEndpoint($url);
+    }
 
     if(!$authorizationEndpoint) {
       return self::_errorResponse('missing_authorization_endpoint', 'Could not find your authorization endpoint');
@@ -102,6 +115,16 @@ class Client {
       return self::_errorResponse('invalid_state', 'The authorization server returned an invalid state parameter');
     }
 
+    if (isset($_SESSION['indieauth_issuer'])) {
+      if (!isset($params['iss'])) {
+        return self::_errorResponse('missing_iss', 'The authorization server did not return the iss parameter');
+      }
+
+      if ($params['iss'] !== $_SESSION['indieauth_issuer']) {
+        return self::_errorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
+      }
+    }
+
     if(isset($_SESSION['indieauth_token_endpoint'])) {
       $data = self::exchangeAuthorizationCode($_SESSION['indieauth_token_endpoint'], [
         'code' => $params['code'],
@@ -134,9 +157,12 @@ class Client {
       return self::_errorResponse($error, $error_description, $data);
     }
 
-    // If the returned "me" is not the same as the entered "me", check that the authorization server linked to
+    // If the returned "me" is not the same as the entered "me", check that the authorization endpoint linked to
     // by the returned URL is the same as the one used
     if($_SESSION['indieauth_entered_url'] != $data['response']['me']) {
+      // Discover and populate metadata if the returned "me" has a metadata endpoint
+      $metadataEndpoint = self::discoverMetadataEndpoint($data['response']['me']);
+
       // Go find the authorization endpoint that the returned "me" URL declares
       $authorizationEndpoint = static::discoverAuthorizationEndpoint($data['response']['me']);
 
@@ -171,6 +197,7 @@ class Client {
     unset($_SESSION['indieauth_code_verifier']);
     unset($_SESSION['indieauth_authorization_endpoint']);
     unset($_SESSION['indieauth_token_endpoint']);
+    unset($_SESSION['indieauth_issuer']);
   }
 
   public static function setUpHTTP() {
@@ -193,6 +220,34 @@ class Client {
       || !array_key_exists('host', $url)
     ) {
       // Invalid url
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * @see https://indieauth.spec.indieweb.org/#indieauth-server-metadata
+   */
+  private static function _isIssuerValid($issuer, $metadata_endpoint) {
+    $issuer = self::normalizeMeURL($issuer);
+    if (!$issuer) {
+      return false;
+    }
+
+    $parts = parse_url($issuer);
+
+    if (!array_key_exists('scheme', $parts) || $parts['scheme'] != 'https') {
+      return false;
+    }
+
+    if (array_key_exists('query', $parts) || array_key_exists('fragment', $parts)) {
+      return false;
+    }
+
+    $metadata_endpoint = self::normalizeMeURL($metadata_endpoint);
+
+    if (strpos($metadata_endpoint, $issuer) !== 0) {
       return false;
     }
 
@@ -223,20 +278,75 @@ class Client {
     }
   }
 
-  private static function _discoverEndpoint($url, $name) {
-    if(!self::_urlIsValid($url))
-      return null;
+  private static function _fetchMetadata($url) {
+    self::setUpHTTP();
 
-    // First check the HTTP headers for an authorization endpoint
+    if(array_key_exists($url, self::$_metadata_body)) {
+      return self::$_metadata_body[$url];
+    } else {
+      $response = self::$http->get($url);
+      self::setMetadata($url, $response['body']);
+      return self::$_metadata_body[$url];
+    }
+  }
+
+  private static function resetMetadata() {
+    self::$_metadata_body = array();
+    self::$_metadata = null;
+  }
+
+  /**
+   * Set metadata body
+   * $body is expected to be JSON and will attempt
+   * to decode to array in self::$_metadata
+   */
+  public static function setMetadata($url, $body) {
+    self::resetMetadata();
+
+    self::$_metadata_body[$url] = $body;
+    $metadata_array = json_decode($body, true);
+    if (!is_null($metadata_array)) {
+      self::$_metadata = $metadata_array;
+    }
+  }
+
+  public function getMetadata() {
+    return self::$_metadata;
+  }
+
+  private static function _discoverEndpoint($url, $name) {
+    if(!self::_urlIsValid($url)) {
+      return null;
+    }
+
+    // First check the parsed metadata for the endpoint
+    if ($endpoint = self::_discoverFromMetadata($name)) {
+      return $endpoint;
+    }
+
+    // If not found, check the HTTP headers for the endpoint
     $headerString = self::_fetchHead($url);
 
-    if($endpoint = self::_extractEndpointFromHeaders($headerString, $url, $name))
+    if($endpoint = self::_extractEndpointFromHeaders($headerString, $url, $name)) {
       return $endpoint;
+    }
 
     // If not found, check the body for a rel value
     $html = self::_fetchBody($url);
 
     return self::_extractEndpointFromHTML($html, $url, $name);
+  }
+
+  private static function _discoverFromMetadata($name) {
+    if (!self::$_metadata) {
+      return null;
+    }
+
+    if (array_key_exists($name, self::$_metadata)) {
+      return self::$_metadata[$name];
+    }
+
+    return null;
   }
 
   private static function _extractEndpointFromHeaders($headerString, $url, $name) {
@@ -264,12 +374,32 @@ class Client {
     return false;
   }
 
+  public static function discoverMetadataEndpoint($url) {
+    if ($endpoint = self::_discoverEndpoint($url, 'indieauth-metadata')) {
+      self::_fetchMetadata($endpoint);
+    }
+
+    return $endpoint;
+  }
+
   public static function discoverAuthorizationEndpoint($url) {
     return self::_discoverEndpoint($url, 'authorization_endpoint');
   }
 
   public static function discoverTokenEndpoint($url) {
     return self::_discoverEndpoint($url, 'token_endpoint');
+  }
+
+  public static function discoverRevocationEndpoint($url) {
+    return self::_discoverEndpoint($url, 'revocation_endpoint');
+  }
+
+  public static function discoverIntrospectionEndpoint($url) {
+    return self::_discoverEndpoint($url, 'introspection_endpoint');
+  }
+
+  public static function discoverUserinfoEndpoint($url) {
+    return self::_discoverEndpoint($url, 'userinfo_endpoint');
   }
 
   public static function discoverMicropubEndpoint($url) {
@@ -353,8 +483,8 @@ class Client {
   }
 
   public static function build_url($parsed_url) {
-    $scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
-    $host     = isset($parsed_url['host']) ? $parsed_url['host'] : '';
+    $scheme   = isset($parsed_url['scheme']) ? strtolower($parsed_url['scheme']) . '://' : '';
+    $host     = isset($parsed_url['host']) ? strtolower($parsed_url['host']) : '';
     $port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
     $user     = isset($parsed_url['user']) ? $parsed_url['user'] : '';
     $pass     = isset($parsed_url['pass']) ? ':' . $parsed_url['pass']  : '';
