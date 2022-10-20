@@ -158,7 +158,7 @@ if ($metadataEndpoint) {
   $response = self::discoverIssuer($metadataEndpoint);
   if ($response instanceof IndieAuth\ErrorResponse) {
     // handle the error response, array with keys `error` and `error_description`
-    die($response->getArray());
+    die(json_encode($response->getArray()));
   }
 
   $_SESSION['indieauth_issuer'] = $response;
@@ -373,14 +373,14 @@ Next, the `state` and `iss` parameters must be verified to match the authorizati
 $response = self::validateStateMatch($_GET, $_SESSION['indieauth_state']);
 if ($response instanceof ErrorResponse) {
   // handle the error response, array with keys `error` and `error_description`
-  die($response->getArray());
+  die(json_encode($response->getArray()));
 }
 
 if (isset($_SESSION['indieauth_issuer'])) {
   $response = self::validateIssuerMatch($_GET, $_SESSION['indieauth_issuer']);
   if ($response instanceof ErrorResponse) {
     // handle the error response, array with keys `error` and `error_description`
-    die($response->getArray());
+    die(json_encode($response->getArray()));
   }
 }
 ```
