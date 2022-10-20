@@ -1,10 +1,9 @@
 <?php
+
 namespace IndieAuth;
 
-define('RANDOM_BYTE_COUNT', 8);
-define('VERSION', '1.1.4');
-
 class Client {
+  const VERSION = '1.1.6';
 
   private static $_headers = array();
   private static $_body = array();
@@ -17,6 +16,7 @@ class Client {
 
   public static $clientID;
   public static $redirectURL;
+  public static $random_byte_count = 8;
 
   // Handles everything you need to start the authorization process.
   // Discovers the user's auth endpoints, generates and stores a state in the session.
@@ -25,10 +25,7 @@ class Client {
   // when this client is used with services like indielogin.com
   public static function begin($url, $scope=false, $authorizationEndpoint=false) {
     if(!isset(self::$clientID) || !isset(self::$redirectURL)) {
-      return [false, [
-        'error' => 'not_configured',
-        'error_description' => 'Before you can begin, you need to configure the clientID and redirectURL of the IndieAuth client'
-      ]];
+      return self::_errorResponse('not_configured', 'Before you can begin, you need to configure the clientID and redirectURL of the IndieAuth client');
     }
 
     $errorCode = false;
@@ -43,12 +40,12 @@ class Client {
 
     $metadataEndpoint = self::discoverMetadataEndpoint($url);
     if ($metadataEndpoint) {
-      $issuer = self::_discoverFromMetadata('issuer');
-      if (!($issuer && self::_isIssuerValid($issuer, $metadataEndpoint))) {
-        return self::_errorResponse('invalid_issuer', 'Issuer in metadata endpoint is not valid');
+      $response = self::discoverIssuer($metadataEndpoint);
+      if ($response instanceof ErrorResponse) {
+        return $response->getArray();
       }
 
-      $_SESSION['indieauth_issuer'] = $issuer;
+      $_SESSION['indieauth_issuer'] = $response;
     }
 
     if(!$authorizationEndpoint) {
@@ -107,21 +104,15 @@ class Client {
         'The response from the authorization server did not return an authorization code or error information');
     }
 
-    if(!isset($params['state'])) {
-      return self::_errorResponse('missing_state', 'The authorization server did not return the state parameter');
-    }
-
-    if($params['state'] != $_SESSION['indieauth_state']) {
-      return self::_errorResponse('invalid_state', 'The authorization server returned an invalid state parameter');
+    $response = self::validateStateMatch($params, $_SESSION['indieauth_state']);
+    if ($response instanceof ErrorResponse) {
+      return $response->getArray();
     }
 
     if (isset($_SESSION['indieauth_issuer'])) {
-      if (!isset($params['iss'])) {
-        return self::_errorResponse('missing_iss', 'The authorization server did not return the iss parameter');
-      }
-
-      if ($params['iss'] !== $_SESSION['indieauth_issuer']) {
-        return self::_errorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
+      $response = self::validateIssuerMatch($params, $_SESSION['indieauth_issuer']);
+      if ($response instanceof ErrorResponse) {
+        return $response->getArray();
       }
     }
 
@@ -179,16 +170,14 @@ class Client {
     return [$data, false];
   }
 
-  private static function _errorResponse($error_code, $description, $debug=null) {
-    $error = [
-      'error' => $error_code,
-      'error_description' => $description,
-    ];
-    if($debug) {
-      $error['debug'] = $debug;
-    }
+  /**
+   * Wrapper to create an ErrorResponse and return the array
+   * @return array
+   */
+  private static function _errorResponse($error_code, $description, $debug = null) {
     self::_clearSessionData();
-    return [false, $error];
+    $error = new ErrorResponse($error_code, $description, $debug);
+    return $error->getArray();
   }
 
   private static function _clearSessionData() {
@@ -204,7 +193,7 @@ class Client {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     if(!isset(self::$http)) {
       self::$http = new \p3k\HTTP();
-      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/'.VERSION);
+      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/' . self::VERSION);
       self::$http->_timeout = 10;
       // You can customize the user agent for your application by calling
       // IndieAuth\Client::$http->set_user_agent('Your User Agent String');
@@ -382,6 +371,23 @@ class Client {
     return $endpoint;
   }
 
+  /**
+   * @param string $metadataEndpoint
+   * @return IndieAuth\ErrorResponse if error, string of `issuer` if valid
+   */
+  public static function discoverIssuer($metadataEndpoint) {
+    $issuer = self::_discoverFromMetadata('issuer');
+    if (!$issuer) {
+      return new ErrorResponse('invalid_issuer', 'No issuer found in metadata endpoint');
+    }
+
+    if (!(self::_isIssuerValid($issuer, $metadataEndpoint))) {
+      return new ErrorResponse('invalid_issuer', 'Issuer in metadata endpoint is not valid');
+    }
+
+    return $issuer;
+  }
+
   public static function discoverAuthorizationEndpoint($url) {
     return self::_discoverEndpoint($url, 'authorization_endpoint');
   }
@@ -500,6 +506,40 @@ class Client {
     return array_filter(array_diff($scopes, ['profile','email']));
   }
 
+  /**
+   * @param array $params
+   * @param string $expected_state
+   * @return IndieAuth\ErrorResponse if error, void (null) if valid
+   */
+  public static function validateStateMatch($params, $expected_state = '') {
+    if (!isset($params['state'])) {
+      return new ErrorResponse('missing_state', 'The authorization server did not return the state parameter');
+    }
+
+    if ($params['state'] !== $expected_state) {
+      return new ErrorResponse('invalid_state', 'The authorization server returned an invalid state parameter');
+    }
+  }
+
+  /**
+   * @param array $params
+   * @param string $expected_issuer
+   * @return IndieAuth\ErrorResponse if error, void (null) if valid
+   */
+  public static function validateIssuerMatch($params, $expected_issuer = '') {
+    if (!$expected_issuer) {
+      return;
+    }
+
+    if (!isset($params['iss'])) {
+      return new ErrorResponse('missing_iss', 'The authorization server did not return the iss parameter');
+    }
+
+    if ($params['iss'] !== $expected_issuer) {
+      return new ErrorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
+    }
+  }
+
   public static function exchangeAuthorizationCode($endpoint, $params) {
     $required = ['code', 'redirect_uri', 'client_id'];
     foreach($required as $r) {
@@ -562,7 +602,7 @@ class Client {
 
   // Optional helper method to generate a state parameter. You can just as easily do this yourself some other way.
   public static function generateStateParameter() {
-    return self::generateRandomString(RANDOM_BYTE_COUNT);
+    return self::generateRandomString(self:: $random_byte_count);
   }
 
   /** PKCE Helpers **/
@@ -580,3 +620,4 @@ class Client {
   }
 
 }
+

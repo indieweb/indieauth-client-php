@@ -1,13 +1,10 @@
-IndieAuth Client
-================
+# IndieAuth Client
 
 This is a simple library to help with IndieAuth. There are two ways you may want to use it, either when developing an application that signs people in using IndieAuth, or when developing your own endpoint for issuing access tokens and you need to verify auth codes.
 
-[![Build Status](https://travis-ci.org/indieweb/indieauth-client-php.png?branch=main)](http://travis-ci.org/indieweb/indieauth-client-php)
+![Build Status](https://github.com/indieweb/indieauth-client-php/actions/workflows/main.yml/badge.svg)
 
-
-Quick Start
------------
+## Quick Start
 
 If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed-usage-for-clients) below.
 
@@ -64,7 +61,6 @@ if($error) {
   // Redirect the user to their authorization endpoint
   header('Location: '.$authorizationURL);
 }
-
 ```
 
 The following scopes have special meaning to the authorization server and will request the user's full profile info instead of just verifying their profile URL:
@@ -77,7 +73,7 @@ Any other scopes requested are assumed to be scopes that will request an access 
 
 ### Handling the Redirect
 
-In your redirect file, you just need to pass all the query string parameters to the library and it will take care of things! It will use the authorization or token endpoint it found in the initial step, and will use the authorization code to verify the profile information or get an access token depending on whether you've requested any scopes.
+In your redirect file, pass all the query string parameters to the library and it will take care of things! It will use the authorization or token endpoint it found in the initial step, and will use the authorization code to verify the profile information or get an access token depending on whether you've requested any scopes.
 
 The result will be the response from the authorization endpoint or token, which will contain the user's final `me` URL as well as the access token if you requested one or more scopes.
 
@@ -120,12 +116,10 @@ if($error) {
   // You'll probably want to save the user's URL in the session
   $_SESSION['user'] = $user['me'];
 }
-
 ```
 
 
-Detailed Usage for Clients
---------------------------
+## Detailed Usage for Clients
 
 The first thing an IndieAuth client needs to do is to prompt the user to enter their web address. This is the basis of IndieAuth, where user identifiers are URLs. A typical IndieAuth sign-in form may look something like the following.
 
@@ -139,13 +133,52 @@ This form will make a POST request to your app's server, at which point you can 
 
 ### Discovering the required endpoints
 
-The user will need to define up to four endpoints for their URL before a client can perform authorization. Endpoints can be specified by either an HTTP `Link` header or by using `<link>` tags in the HTML head.
+The user will need to define endpoints for their URL before a client can perform authorization. These endpoints should be specified in the [IndieAuth Server Metadata](https://indieauth.spec.indieweb.org/#discovery-by-clients) endpoint using either an HTTP `Link` header or a `<link>` tag with relation `indieauth-metadata`:
+
+```html
+<link rel="indieauth-metadata" href="https://example.com/auth-metadata">
+```
 
 These discovery methods can be run all sequentially and the library will avoid making duplicate HTTP requests if it has already fetched the page once.
 
+#### Metadata Endpoint
+
+You should first attempt to discover the metadata endpoint.
+
+```php
+// Normalize whatever the user entered to be a URL, e.g. "example.com" to "https://example.com/"
+$url = IndieAuth\Client::normalizeMeURL($url);
+$metadataEndpoint = IndieAuth\Client::discoverMetadataEndpoint($url);
+```
+
+If it is found, then discover and verify the `issuer` parameter in the metadata:
+
+```php
+if ($metadataEndpoint) {
+  $response = self::discoverIssuer($metadataEndpoint);
+  if ($response instanceof IndieAuth\ErrorResponse) {
+    // handle the error response, array with keys `error` and `error_description`
+    die($response->getArray());
+  }
+
+  $_SESSION['indieauth_issuer'] = $response;
+}
+```
+
+The `issuer` value should be stored in the session to verify the Authorization Response later in the process (see below).
+
+If the metadata endpoint is not found, the methods below will try to discover the individual `<link>` relations for backwards compability.
 
 #### Authorization Endpoint
 
+In IndieAuth Server Metadata:
+```json
+{
+  "authorization_endpoint": "https://indieauth.example.com/auth"
+}
+```
+
+Or backwards compatible relations:
 ```html
 <link rel="authorization_endpoint" href="https://example.com/auth">
 ```
@@ -156,7 +189,7 @@ Link: <https://example.com/auth>; rel="authorization_endpoint"
 
 The authorization endpoint allows a website to specify the location to direct the user's browser to when performing the initial authorization request.
 
-Since this can be a full URL, this allows a website to use an external auth server such as [indieauth.com](https://indieauth.com) as its authorization endpoint. This allows people to delegate the handling and verification of authorization and authentication to an external service to speed up development. Of course at any point, the authorization server can be changed, and API clients and users will not need any modifications.
+Since this can be a full URL, this allows a website to use an external server as its authorization endpoint. This allows people to delegate the handling and verification of authorization and authentication to an external service to speed up development. Of course at any point, the authorization server can be changed, and API clients and users will not need any modifications.
 
 The following function will fetch the user's home page and return the authorization endpoint, or `false` if none was found.
 
@@ -168,6 +201,14 @@ $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($url);
 
 #### Token Endpoint
 
+In IndieAuth Server Metadata:
+```json
+{
+  "token_endpoint": "https://indieauth.example.com/token"
+}
+```
+
+Or backwards compatible relations:
 ```html
 <link rel="token_endpoint" href="https://example.com/token">
 ```
@@ -229,12 +270,39 @@ $microsubEndpoint = IndieAuth\Client::discoverMicrosubEndpoint($url);
 
 The client may wish to discover all endpoints at the beginning, and cache the values in a session for later use.
 
+#### Additional Endpoints
+
+IndieAuth Server Metadata allows defining some additional endpoints:
+
+**Token Revocation**
+
+Return the `revocation_endpoint` or false if none was found:
+```php
+$url = IndieAuth\Client::normalizeMeURL($url);
+$revocationEndpoint = IndieAuth\Client::discoverRevocationEndpoint($url);
+```
+
+**Token Introspection**
+
+Return the `introspection_endpoint` or false if none was found:
+```php
+$url = IndieAuth\Client::normalizeMeURL($url);
+$introspectionEndpoint = IndieAuth\Client::discoverIntrospectionEndpoint($url);
+```
+
+**Userinfo**
+
+Return the `userinfo_endpoint` or false if none was found:
+```php
+$url = IndieAuth\Client::normalizeMeURL($url);
+$userinfoEndpoint = IndieAuth\Client::discoverUserinfoEndpoint($url);
+```
 
 ### Building the authorization URL
 
 Once the client has discovered the authorization server, it will need to build the authorization URL and direct the user's browser there.
 
-For web sites, the client should send a 301 redirect to the authorization URL, or can open a new browser window. Native apps must launch a native browser window to the autorization URL and handle the redirect back to the native app appropriately.
+For web sites, the client should send a 301 redirect to the authorization URL, or can open a new browser window. Native apps must launch a native browser window to the authorization URL and handle the redirect back to the native app appropriately.
 
 #### Authorization Endpoint Parameters
 * `me` - the URL the user entered to begin the flow.
@@ -294,6 +362,30 @@ If the user approves the request, the authorization server will redirect back to
 
 * `code` - the authorization code
 * `state` - the state value provided in the request
+* `iss` - the issuer identifier for client validation
+
+
+### Validate the Authorization Response
+
+Next, the `state` and `iss` parameters must be verified to match the authorization request:
+
+```php
+$response = self::validateStateMatch($_GET, $_SESSION['indieauth_state']);
+if ($response instanceof ErrorResponse) {
+  // handle the error response, array with keys `error` and `error_description`
+  die($response->getArray());
+}
+
+if (isset($_SESSION['indieauth_issuer'])) {
+  $response = self::validateIssuerMatch($_GET, $_SESSION['indieauth_issuer']);
+  if ($response instanceof ErrorResponse) {
+    // handle the error response, array with keys `error` and `error_description`
+    die($response->getArray());
+  }
+}
+```
+
+If both are valid, you can continue to exchange the authorization code.
 
 
 ### Exchanging the authorization code for profile info
@@ -328,7 +420,6 @@ array(
   'response_code' => 200
 );
 ```
-
 
 
 ### Exchanging the authorization code for an access token
@@ -377,12 +468,10 @@ If you are using the individual methods instead of the begin/complete wrapper, t
 if($response['me'] != $_SESSION['user_entered_url']) {
   $authorizationEndpoint = IndieAuth\Client::discoverAuthorizationEndpoint($response['me']);
   if($authorizationEndpoint != $_SESSION['authorization_endpoint']) {
-    echo "The authorization endpoint at the profile URL is not the same as the one used to begin the flow!";
-    die();
+    die("The authorization endpoint at the profile URL is not the same as the one used to begin the flow!");
   }
 }
 ```
-
 
 
 ### Making API requests
@@ -395,13 +484,29 @@ To make an API request, include the access token in an HTTP "Authorization" head
 Authorization: Bearer xxxxxxxx
 ```
 
+### Additional Settings
+
+There are a couple settings you can update if necessary:
+
+**HTTP User Agent**
+
+The default UA mimics a browser by default. You can customize this by calling:
+
+```php
+IndieAuth\Client::$http->set_user_agent('Your User Agent String');
+```
+
+**Number of bytes in state parameter**
+
+The default state parameter is generated with 8 random bytes. You can change the number of bytes by calling:
+
+```php
+IndieAuth\Client::$random_byte_count = 16;
+```
 
 
+# License
 
-License
--------
-
-Copyright 2013-2020 by Aaron Parecki and contributors
+Copyright 2013-2022 by Aaron Parecki and contributors
 
 Available under the MIT and Apache 2.0 licenses. See LICENSE.txt
-
