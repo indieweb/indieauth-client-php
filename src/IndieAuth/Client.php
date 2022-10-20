@@ -310,7 +310,7 @@ class Client {
     }
   }
 
-  public function getMetadata() {
+  public static function getMetadata() {
     return self::$_metadata;
   }
 
