@@ -371,14 +371,14 @@ Next, the `state` and `iss` parameters must be verified to match the authorizati
 
 ```php
 $response = self::validateStateMatch($_GET, $_SESSION['indieauth_state']);
-if ($response instanceof ErrorResponse) {
+if ($response instanceof IndieAuth\ErrorResponse) {
   // handle the error response, array with keys `error` and `error_description`
   die(json_encode($response->getArray()));
 }
 
 if (isset($_SESSION['indieauth_issuer'])) {
   $response = self::validateIssuerMatch($_GET, $_SESSION['indieauth_issuer']);
-  if ($response instanceof ErrorResponse) {
+  if ($response instanceof IndieAuth\ErrorResponse) {
     // handle the error response, array with keys `error` and `error_description`
     die(json_encode($response->getArray()));
   }
