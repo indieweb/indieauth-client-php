@@ -1,6 +1,7 @@
 <?php  
 
 use IndieAuth\Client;
+use IndieAuth\ErrorResponse;
 
 class MetadataTest extends IndieAuthTestCase {
 
@@ -127,6 +128,51 @@ class MetadataTest extends IndieAuthTestCase {
     );
 
     $this->assertTrue($result);
+  }
+
+  public function testDiscoverIssuer()
+  {
+    Client::setMetadata('https://example.com/', $this->default_metadata);
+
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      'discoverIssuer',
+      ['https://example.com/indieauth-metadata-endpoint']
+    );
+
+    $this->assertEquals('https://example.com/', $result);
+  }
+
+  /**
+   * `issuer` must be provided in indieauth-metadata
+   */
+  public function testDiscoverIssuerMissing()
+  {
+    Client::setMetadata('https://example.com/', '{"authorization_endpoint":"https://example.com/authorization-endpoint"}');
+    $metadata_endpoint = 'https://example.com/indieauth-metadata-endpoint';
+
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      'discoverIssuer',
+      [$metadata_endpoint]
+    );
+    $this->assertInstanceOf(ErrorResponse::class, $result);
+  }
+
+  /**
+   * `issuer` must be a prefix of the metadata endpoint
+   */
+  public function testDiscoverIssuerNotAPrefix()
+  {
+    Client::setMetadata('https://example.org/', $this->default_metadata);
+    $metadata_endpoint = 'https://example.org/indieauth-metadata-endpoint';
+
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      'discoverIssuer',
+      [$metadata_endpoint]
+    );
+    $this->assertInstanceOf(ErrorResponse::class, $result);
   }
 
   public function testDiscoverRevocationEndpoint() {
