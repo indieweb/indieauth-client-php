@@ -4,6 +4,22 @@ This is a simple library to help with IndieAuth. There are two ways you may want
 
 ![Build Status](https://github.com/indieweb/indieauth-client-php/actions/workflows/main.yml/badge.svg)
 
+## Installation
+
+To install using [Composer](http://getcomposer.org), run:
+
+```
+composer require indieauth/client
+```
+
+This library follows [PSR-4](https://www.php-fig.org/psr/psr-4/) for autoloading. To autoload, ensure that your application requires the Composer autoload file:
+
+```php 
+<?php
+
+require __DIR__ . '/vendor/autoload.php';
+```
+
 ## Quick Start
 
 If you want to get started quickly, and if you're okay with letting the library store things in the PHP session itself, then you can follow the examples below. If you need more control or want to step into the details of the IndieAuth flow, see the [Detailed Usage for Clients](#detailed-usage-for-clients) below.
