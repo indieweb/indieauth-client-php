@@ -75,6 +75,14 @@ class ClientTest extends IndieAuthTestCase
     $this->assertNull($response);
   }
 
+  public function testValidateIssuerNormalizes()
+  {
+    $expected_issuer = 'https://issuer.example.com';
+    $params = ['iss' => $expected_issuer];
+    $response = Client::validateIssuerMatch($params, $expected_issuer.'/');
+    $this->assertNull($response);
+  }
+
   public function testValidateIssuerMissing()
   {
     $expected_issuer = 'https://issuer.example.com/';
