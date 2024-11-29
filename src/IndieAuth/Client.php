@@ -535,7 +535,7 @@ class Client {
       return new ErrorResponse('missing_iss', 'The authorization server did not return the iss parameter');
     }
 
-    if ($params['iss'] !== $expected_issuer) {
+    if (self::normalizeMeURL($params['iss']) !== self::normalizeMeURL($expected_issuer)) {
       return new ErrorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
     }
   }
