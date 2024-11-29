@@ -117,14 +117,14 @@ class Client {
     }
 
     if(isset($_SESSION['indieauth_token_endpoint'])) {
-      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_token_endpoint'], [
+      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_token_endpoint'].'?me='.$params['me'], [
         'code' => $params['code'],
         'redirect_uri' => self::$redirectURL,
         'client_id' => self::$clientID,
         'code_verifier' => $_SESSION['indieauth_code_verifier'],
       ]);
     } else {
-      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_authorization_endpoint'], [
+      $data = self::exchangeAuthorizationCode($_SESSION['indieauth_authorization_endpoint'].'?me='.$params['me'], [
         'code' => $params['code'],
         'redirect_uri' => self::$redirectURL,
         'client_id' => self::$clientID,
