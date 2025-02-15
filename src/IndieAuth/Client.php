@@ -90,28 +90,33 @@ class Client {
     $requiredSessionKeys = ['indieauth_entered_url', 'indieauth_state', 'indieauth_authorization_endpoint'];
     foreach($requiredSessionKeys as $key) {
       if(!isset($_SESSION[$key])) {
+        error_log("IndieAuth\Client: missing $key from session");
         return self::_errorResponse('invalid_session',
           'The session was missing data. Ensure that you are initializing the session before using this library');
       }
     }
 
     if(isset($params['error'])) {
+      error_log("IndieAuth\Client: found error in params");
       return self::_errorResponse($params['error'], isset($params['error_description']) ? $params['error_description'] : '');
     }
 
     if(!isset($params['code'])) {
+      error_log("IndieAuth\Client: missing code in params");
       return self::_errorResponse('invalid_response',
         'The response from the authorization server did not return an authorization code or error information');
     }
 
     $response = self::validateStateMatch($params, $_SESSION['indieauth_state']);
     if ($response instanceof ErrorResponse) {
+      error_log("IndieAuth\Client: failed to validate that the state matched");
       return $response->getArray();
     }
 
     if (isset($_SESSION['indieauth_issuer'])) {
       $response = self::validateIssuerMatch($params, $_SESSION['indieauth_issuer']);
       if ($response instanceof ErrorResponse) {
+        error_log("IndieAuth\Client: failed to validate that the issuer matched");
         return $response->getArray();
       }
     }
@@ -227,16 +232,19 @@ class Client {
     $parts = parse_url($issuer);
 
     if (!array_key_exists('scheme', $parts) || $parts['scheme'] != 'https') {
+      error_log("IndieAuth\Client.php: failed scheme");
       return false;
     }
 
     if (array_key_exists('query', $parts) || array_key_exists('fragment', $parts)) {
+      error_log("IndieAuth\Client.php: failed query or fragment");
       return false;
     }
 
     $metadata_endpoint = self::normalizeMeURL($metadata_endpoint);
 
     if (strpos($metadata_endpoint, $issuer) !== 0) {
+      error_log("IndieAuth\Client.php: failed metadata and issuer comparison");
       return false;
     }
 
