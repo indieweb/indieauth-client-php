@@ -128,6 +128,74 @@ class MetadataTest extends IndieAuthTestCase {
     );
 
     $this->assertTrue($result);
+
+    # RFC 8414: the well-known path is inserted between the host and the issuer's path
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['https://example.com/s/abc/', 'https://example.com/.well-known/oauth-authorization-server/s/abc']
+    );
+
+    $this->assertTrue($result);
+
+    # ... also with the OpenID Connect document name
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['https://example.com/s/abc/', 'https://example.com/.well-known/openid-configuration/s/abc']
+    );
+
+    $this->assertTrue($result);
+
+    # ... and for an issuer without a path (also a prefix match)
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['https://example.com/', 'https://example.com/.well-known/oauth-authorization-server']
+    );
+
+    $this->assertTrue($result);
+
+    # the well-known location for a different path is not this issuer's
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['https://example.com/s/abc/', 'https://example.com/.well-known/oauth-authorization-server/s/xyz']
+    );
+
+    $this->assertFalse($result);
+
+    # nor is the well-known location on another host
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['https://example.com/s/abc/', 'https://example.org/.well-known/oauth-authorization-server/s/abc']
+    );
+
+    $this->assertFalse($result);
+
+    # http is still refused, well-known or not
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      '_isIssuerValid',
+      ['http://example.com/s/abc/', 'http://example.com/.well-known/oauth-authorization-server/s/abc']
+    );
+
+    $this->assertFalse($result);
+  }
+
+  public function testWellKnownMetadataURLs() {
+    $this->assertEquals([
+      'https://example.com/.well-known/oauth-authorization-server/s/abc',
+      'https://example.com/.well-known/openid-configuration/s/abc',
+    ], Client::wellKnownMetadataURLs('https://example.com/s/abc/'));
+
+    $this->assertEquals([
+      'https://example.com:8443/.well-known/oauth-authorization-server',
+      'https://example.com:8443/.well-known/openid-configuration',
+    ], Client::wellKnownMetadataURLs('https://example.com:8443/'));
+
+    $this->assertEquals([], Client::wellKnownMetadataURLs('not a url'));
   }
 
   public function testDiscoverIssuer()
@@ -173,6 +241,22 @@ class MetadataTest extends IndieAuthTestCase {
       [$metadata_endpoint]
     );
     $this->assertInstanceOf(ErrorResponse::class, $result);
+  }
+
+  /**
+   * `issuer` may also name the RFC 8414 well-known location the metadata was fetched from
+   */
+  public function testDiscoverIssuerAtWellKnownLocation()
+  {
+    $metadata_endpoint = 'https://example.com/.well-known/oauth-authorization-server/s/abc';
+    Client::setMetadata($metadata_endpoint, '{"issuer":"https://example.com/s/abc/","authorization_endpoint":"https://example.com/s/abc/auth","token_endpoint":"https://example.com/token"}');
+
+    $result = $this->_invokeStaticMethod(
+      Client::class,
+      'discoverIssuer',
+      [$metadata_endpoint]
+    );
+    $this->assertEquals('https://example.com/s/abc/', $result);
   }
 
   public function testDiscoverRevocationEndpoint() {

@@ -236,11 +236,40 @@ class Client {
 
     $metadata_endpoint = self::normalizeMeURL($metadata_endpoint);
 
-    if (strpos($metadata_endpoint, $issuer) !== 0) {
-      return false;
+    // The issuer is a prefix of the metadata URL (IndieAuth), or the metadata
+    // URL is the RFC 8414 well-known location for the issuer, which inserts
+    // /.well-known/oauth-authorization-server (or openid-configuration)
+    // between the host and the issuer's path. The next IndieAuth draft uses
+    // the RFC 8414 form; servers such as IndieKey.id already do.
+    if (strpos($metadata_endpoint, $issuer) === 0) {
+      return true;
     }
 
-    return true;
+    return in_array(rtrim($metadata_endpoint, '/'), self::wellKnownMetadataURLs($issuer), true);
+  }
+
+  /**
+   * The RFC 8414 (section 3) metadata locations for an issuer identifier:
+   * https://host/.well-known/oauth-authorization-server followed by the
+   * issuer's path, and the openid-configuration equivalent. Without a
+   * trailing slash, for comparison.
+   *
+   * @param string $issuer a normalized issuer URL
+   * @return string[]
+   */
+  public static function wellKnownMetadataURLs($issuer) {
+    $parts = parse_url($issuer);
+    if(!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
+      return [];
+    }
+
+    $base = strtolower($parts['scheme']) . '://' . strtolower($parts['host']) . (isset($parts['port']) ? ':' . $parts['port'] : '');
+    $path = rtrim($parts['path'] ?? '', '/');
+
+    return [
+      $base . '/.well-known/oauth-authorization-server' . $path,
+      $base . '/.well-known/openid-configuration' . $path,
+    ];
   }
 
   private static function _fetchHead($url) {
