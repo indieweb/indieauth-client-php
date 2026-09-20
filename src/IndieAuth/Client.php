@@ -198,7 +198,7 @@ class Client {
     // Unfortunately I've seen a bunch of websites return different content when the user agent is set to something like curl or other server-side libraries, so we have to pretend to be a browser to successfully get the real HTML
     if(!isset(self::$http)) {
       self::$http = new \p3k\HTTP();
-      self::$http->set_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 indieauth-client/' . self::VERSION);
+      self::$http->set_user_agent('indieauth-client/' . self::VERSION);
       self::$http->_timeout = 10;
       // You can customize the user agent for your application by calling
       // IndieAuth\Client::$http->set_user_agent('Your User Agent String');
@@ -243,12 +243,42 @@ class Client {
 
     $metadata_endpoint = self::normalizeMeURL($metadata_endpoint);
 
-    if (strpos($metadata_endpoint, $issuer) !== 0) {
-      error_log("IndieAuth\Client.php: failed metadata and issuer comparison");
+    // The issuer is a prefix of the metadata URL (IndieAuth), or the metadata
+    // URL is the RFC 8414 well-known location for the issuer, which inserts
+    // /.well-known/oauth-authorization-server between the host and the
+    // issuer's path. The next IndieAuth draft uses the RFC 8414 form; servers
+    // such as IndieKey.id already do.
+    if (strpos($metadata_endpoint, $issuer) === 0) {
+      return true;
+    }
+
+    if (rtrim($metadata_endpoint, '/') === self::wellKnownMetadataURL($issuer)) {
+      return true;
+    }
+
+    error_log("IndieAuth\Client.php: failed metadata and issuer comparison");
+    return false;
+  }
+
+  /**
+   * The RFC 8414 (section 3) metadata location for an issuer identifier:
+   * https://host/.well-known/oauth-authorization-server followed by the
+   * issuer's path. Without a trailing slash, for comparison. False when the
+   * issuer is not a URL.
+   *
+   * @param string $issuer a normalized issuer URL
+   * @return string|false
+   */
+  public static function wellKnownMetadataURL($issuer) {
+    $parts = parse_url($issuer);
+    if(!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
       return false;
     }
 
-    return true;
+    $base = strtolower($parts['scheme']) . '://' . strtolower($parts['host']) . (isset($parts['port']) ? ':' . $parts['port'] : '');
+    $path = rtrim($parts['path'] ?? '', '/');
+
+    return $base . '/.well-known/oauth-authorization-server' . $path;
   }
 
   private static function _fetchHead($url) {
@@ -543,7 +573,7 @@ class Client {
       return new ErrorResponse('missing_iss', 'The authorization server did not return the iss parameter');
     }
 
-    if ($params['iss'] !== $expected_issuer) {
+    if (self::normalizeMeURL($params['iss']) !== self::normalizeMeURL($expected_issuer)) {
       return new ErrorResponse('invalid_iss', 'The authorization server returned an invalid iss parameter');
     }
   }
