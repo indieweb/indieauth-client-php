@@ -404,9 +404,51 @@ if (isset($_SESSION['indieauth_issuer'])) {
 If both are valid, you can continue to exchange the authorization code.
 
 
-### Exchanging the authorization code for profile info
+### Exchanging the authorization code for profile info or an access token
 
-If the client is not trying to get an access token, just trying to verify the user's URL, then it will need to exchange the authorization code for profile information at the authorization endpoint.
+If the client requested any scopes beyond profile scopes and is expecting an access token, it needs to exchange the authorization code for an access token at the token endpoint.
+
+To get an access token, the client makes a POST request to the token endpoint, passing in the authorization code as well as the following parameters:
+
+* `code` - the authorization code obtained
+* `me` - the user's URL
+* `redirect_uri` - must match the redirect URI used in the request to obtain the authorization code
+* `client_id` - must match the client ID used in the initial request
+* `code_verifier` - if the client included a code challenge in the authorization request, then it must include the plaintext secret in the code exchange step here
+
+The following function will make a POST request to the token endpoint and parse the result.
+
+```php
+$response = IndieAuth\Client::exchangeAuthorizationCode($tokenEndpoint, [
+  'code' => $_GET['code'],
+  'redirect_uri' => $redirect_uri,
+  'client_id' => $client_id,
+  'code_verifier' => $_SESSION['code_verifier'],
+]);
+```
+
+The `$response` variable will include the response from the token endpoint, such as the following:
+
+```php
+array(
+  'response' => [
+    'me' => 'https://aaronparecki.com/',
+    'access_token' => 'xxxxxxxxx',
+    'scope' => 'create',
+    'profile' => [
+      'name' => 'Aaron Parecki',
+      'url' => 'https://aaronparecki.com/',
+      'photo' => 'https://aaronparecki.com/images/profile.jpg'
+    ]
+  ],
+  'raw_response' => '{"me":"https://aaronparecki.com/","access_token":"xxxxxxxxx","scope":"create","profile":{"name":"Aaron Parecki","url":"https://aaronparecki.com/","photo":"https://aaronparecki.com/images/profile.jpg"}}',
+  'response_code' => 200
+);
+```
+
+#### Legacy exchange of authorization code for profile info
+
+To support older IndieAuth servers that return profile info from the authorization endpoint instead of token endpoint, you can pass that endpoint into the `exchangeAuthorizationCode` function. 
 
 The following function will make a POST request to the authorization endpoint and parse the result.
 
@@ -437,43 +479,6 @@ array(
 );
 ```
 
-
-### Exchanging the authorization code for an access token
-
-If the client requested any scopes beyond profile scopes and is expecting an access token, it needs to exchange the authorization code for an access token at the token endpoint.
-
-To get an access token, the client makes a POST request to the token endpoint, passing in the authorization code as well as the following parameters:
-
-* `code` - the authorization code obtained
-* `me` - the user's URL
-* `redirect_uri` - must match the redirect URI used in the request to obtain the authorization code
-* `client_id` - must match the client ID used in the initial request
-* `code_verifier` - if the client included a code challenge in the authorization request, then it must include the plaintext secret in the code exchange step here
-
-The following function will make a POST request to the token endpoint and parse the result.
-
-```php
-$response = IndieAuth\Client::exchangeAuthorizationCode($tokenEndpoint, [
-  'code' => $_GET['code'],
-  'redirect_uri' => $redirect_uri,
-  'client_id' => $client_id,
-  'code_verifier' => $_SESSION['code_verifier'],
-]);
-```
-
-The `$response` variable will include the response from the token endpoint, such as the following:
-
-```php
-array(
-  'response' => [
-    'me' => 'https://aaronparecki.com/',
-    'access_token' => 'xxxxxxxxx',
-    'scope' => 'create'
-  ],
-  'raw_response' => '{"me":"https://aaronparecki.com/","access_token":"xxxxxxxxx","scope":"create"}',
-  'response_code' => 200
-);
-```
 
 
 ### Verifying the Authorization Server
@@ -523,6 +528,6 @@ IndieAuth\Client::$random_byte_count = 16;
 
 # License
 
-Copyright 2013-2022 by Aaron Parecki and contributors
+Copyright 2013-2026 by Aaron Parecki and contributors
 
 Available under the MIT and Apache 2.0 licenses. See LICENSE.txt
