@@ -138,14 +138,14 @@ class MetadataTest extends IndieAuthTestCase {
 
     $this->assertTrue($result);
 
-    # ... also with the OpenID Connect document name
+    # OpenID Connect discovery has its own rules and is not IndieAuth metadata
     $result = $this->_invokeStaticMethod(
       Client::class,
       '_isIssuerValid',
       ['https://example.com/s/abc/', 'https://example.com/.well-known/openid-configuration/s/abc']
     );
 
-    $this->assertTrue($result);
+    $this->assertFalse($result);
 
     # ... and for an issuer without a path (also a prefix match)
     $result = $this->_invokeStaticMethod(
@@ -184,18 +184,10 @@ class MetadataTest extends IndieAuthTestCase {
     $this->assertFalse($result);
   }
 
-  public function testWellKnownMetadataURLs() {
-    $this->assertEquals([
-      'https://example.com/.well-known/oauth-authorization-server/s/abc',
-      'https://example.com/.well-known/openid-configuration/s/abc',
-    ], Client::wellKnownMetadataURLs('https://example.com/s/abc/'));
-
-    $this->assertEquals([
-      'https://example.com:8443/.well-known/oauth-authorization-server',
-      'https://example.com:8443/.well-known/openid-configuration',
-    ], Client::wellKnownMetadataURLs('https://example.com:8443/'));
-
-    $this->assertEquals([], Client::wellKnownMetadataURLs('not a url'));
+  public function testWellKnownMetadataURL() {
+    $this->assertEquals('https://example.com/.well-known/oauth-authorization-server/s/abc', Client::wellKnownMetadataURL('https://example.com/s/abc/'));
+    $this->assertEquals('https://example.com:8443/.well-known/oauth-authorization-server', Client::wellKnownMetadataURL('https://example.com:8443/'));
+    $this->assertFalse(Client::wellKnownMetadataURL('not a url'));
   }
 
   public function testDiscoverIssuer()

@@ -238,38 +238,35 @@ class Client {
 
     // The issuer is a prefix of the metadata URL (IndieAuth), or the metadata
     // URL is the RFC 8414 well-known location for the issuer, which inserts
-    // /.well-known/oauth-authorization-server (or openid-configuration)
-    // between the host and the issuer's path. The next IndieAuth draft uses
-    // the RFC 8414 form; servers such as IndieKey.id already do.
+    // /.well-known/oauth-authorization-server between the host and the
+    // issuer's path. The next IndieAuth draft uses the RFC 8414 form; servers
+    // such as IndieKey.id already do.
     if (strpos($metadata_endpoint, $issuer) === 0) {
       return true;
     }
 
-    return in_array(rtrim($metadata_endpoint, '/'), self::wellKnownMetadataURLs($issuer), true);
+    return rtrim($metadata_endpoint, '/') === self::wellKnownMetadataURL($issuer);
   }
 
   /**
-   * The RFC 8414 (section 3) metadata locations for an issuer identifier:
+   * The RFC 8414 (section 3) metadata location for an issuer identifier:
    * https://host/.well-known/oauth-authorization-server followed by the
-   * issuer's path, and the openid-configuration equivalent. Without a
-   * trailing slash, for comparison.
+   * issuer's path. Without a trailing slash, for comparison. False when the
+   * issuer is not a URL.
    *
    * @param string $issuer a normalized issuer URL
-   * @return string[]
+   * @return string|false
    */
-  public static function wellKnownMetadataURLs($issuer) {
+  public static function wellKnownMetadataURL($issuer) {
     $parts = parse_url($issuer);
     if(!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
-      return [];
+      return false;
     }
 
     $base = strtolower($parts['scheme']) . '://' . strtolower($parts['host']) . (isset($parts['port']) ? ':' . $parts['port'] : '');
     $path = rtrim($parts['path'] ?? '', '/');
 
-    return [
-      $base . '/.well-known/oauth-authorization-server' . $path,
-      $base . '/.well-known/openid-configuration' . $path,
-    ];
+    return $base . '/.well-known/oauth-authorization-server' . $path;
   }
 
   private static function _fetchHead($url) {
