@@ -11,6 +11,9 @@ class Client {
   private static $_parsedHash = null;
   private static $_metadata_body = array();
   private static $_metadata = null;
+  // The profile URL whose discovery produced $_metadata, so it is never used
+  // for another site. Null when the metadata was set directly.
+  private static $_metadata_for = null;
 
   public static $http;
 
@@ -96,6 +99,14 @@ class Client {
       }
     }
 
+    // Check the state first, even for an error response: otherwise anyone
+    // could send the user to the redirect URL with error text of their own.
+    $response = self::validateStateMatch($params, $_SESSION['indieauth_state']);
+    if ($response instanceof ErrorResponse) {
+      error_log("IndieAuth\Client: failed to validate that the state matched");
+      return $response->getArray();
+    }
+
     if(isset($params['error'])) {
       error_log("IndieAuth\Client: found error in params");
       return self::_errorResponse($params['error'], isset($params['error_description']) ? $params['error_description'] : '');
@@ -105,12 +116,6 @@ class Client {
       error_log("IndieAuth\Client: missing code in params");
       return self::_errorResponse('invalid_response',
         'The response from the authorization server did not return an authorization code or error information');
-    }
-
-    $response = self::validateStateMatch($params, $_SESSION['indieauth_state']);
-    if ($response instanceof ErrorResponse) {
-      error_log("IndieAuth\Client: failed to validate that the state matched");
-      return $response->getArray();
     }
 
     if (isset($_SESSION['indieauth_issuer'])) {
@@ -153,16 +158,13 @@ class Client {
       return self::_errorResponse($error, $error_description, $data);
     }
 
-    // If the returned "me" is not the same as the entered "me", check that the authorization endpoint linked to
-    // by the returned URL is the same as the one used
+    // If the returned "me" is not the same as the entered "me", it must
+    // declare the same authorization server that just answered: the same
+    // issuer, authorization endpoint and token endpoint. The authorization
+    // endpoint alone proves nothing, since any site can copy someone else's
+    // into its own metadata while redeeming the code at its own token endpoint.
     if($_SESSION['indieauth_entered_url'] != $data['response']['me']) {
-      // Discover and populate metadata if the returned "me" has a metadata endpoint
-      $metadataEndpoint = self::discoverMetadataEndpoint($data['response']['me']);
-
-      // Go find the authorization endpoint that the returned "me" URL declares
-      $authorizationEndpoint = static::discoverAuthorizationEndpoint($data['response']['me']);
-
-      if($authorizationEndpoint != $_SESSION['indieauth_authorization_endpoint']) {
+      if(!self::_sameAuthorizationServer($data['response']['me'])) {
         return self::_errorResponse('invalid_authorization_endpoint',
           'The authorization server of the returned profile URL did not match the initial authorization server', $data);
       }
@@ -173,6 +175,37 @@ class Client {
     self::_clearSessionData();
 
     return [$data, false];
+  }
+
+  // Whether a profile URL declares the authorization server recorded in the
+  // session when the flow began.
+  private static function _sameAuthorizationServer($me) {
+    if(!self::_urlIsValid($me))
+      return false;
+
+    $metadataEndpoint = self::discoverMetadataEndpoint($me);
+    $issuer = null;
+    if($metadataEndpoint) {
+      $issuer = self::discoverIssuer($metadataEndpoint);
+      if($issuer instanceof ErrorResponse)
+        return false;
+    }
+    $expectedIssuer = isset($_SESSION['indieauth_issuer']) ? $_SESSION['indieauth_issuer'] : null;
+    if(($issuer === null) !== ($expectedIssuer === null))
+      return false;
+    if($issuer !== null && self::normalizeMeURL($issuer) !== self::normalizeMeURL($expectedIssuer))
+      return false;
+
+    if(static::discoverAuthorizationEndpoint($me) != $_SESSION['indieauth_authorization_endpoint'])
+      return false;
+
+    // Where the code was redeemed: the token endpoint, or the authorization
+    // endpoint when there was none (checked just above).
+    if(isset($_SESSION['indieauth_token_endpoint'])
+      && static::discoverTokenEndpoint($me) != $_SESSION['indieauth_token_endpoint'])
+      return false;
+
+    return true;
   }
 
   /**
@@ -320,6 +353,7 @@ class Client {
   private static function resetMetadata() {
     self::$_metadata_body = array();
     self::$_metadata = null;
+    self::$_metadata_for = null;
   }
 
   /**
@@ -346,22 +380,33 @@ class Client {
       return null;
     }
 
-    // First check the parsed metadata for the endpoint
-    if ($endpoint = self::_discoverFromMetadata($name)) {
-      return $endpoint;
+    // First check the parsed metadata for the endpoint, if it was
+    // discovered from this URL (or set directly)
+    if (self::$_metadata_for === null || self::$_metadata_for === $url) {
+      if ($endpoint = self::_discoverFromMetadata($name)) {
+        return self::_endpointIfValid($endpoint);
+      }
     }
 
     // If not found, check the HTTP headers for the endpoint
     $headerString = self::_fetchHead($url);
 
     if($endpoint = self::_extractEndpointFromHeaders($headerString, $url, $name)) {
-      return $endpoint;
+      return self::_endpointIfValid($endpoint);
     }
 
     // If not found, check the body for a rel value
     $html = self::_fetchBody($url);
 
-    return self::_extractEndpointFromHTML($html, $url, $name);
+    return self::_endpointIfValid(self::_extractEndpointFromHTML($html, $url, $name));
+  }
+
+  // Only http(s) URLs are endpoints: anything else (file:, gopher:, ...) a
+  // site declares is ignored rather than handed to the HTTP client.
+  private static function _endpointIfValid($endpoint) {
+    if(!$endpoint)
+      return $endpoint;
+    return is_string($endpoint) && self::_urlIsValid($endpoint) ? $endpoint : false;
   }
 
   private static function _discoverFromMetadata($name) {
@@ -402,8 +447,12 @@ class Client {
   }
 
   public static function discoverMetadataEndpoint($url) {
+    // Start clean: a site without metadata must not inherit the previous one's.
+    self::resetMetadata();
+
     if ($endpoint = self::_discoverEndpoint($url, 'indieauth-metadata')) {
       self::_fetchMetadata($endpoint);
+      self::$_metadata_for = $url;
     }
 
     return $endpoint;
