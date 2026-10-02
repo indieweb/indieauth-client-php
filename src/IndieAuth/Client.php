@@ -3,7 +3,7 @@
 namespace IndieAuth;
 
 class Client {
-  const VERSION = '1.1.6';
+  const VERSION = '1.2.0';
 
   private static $_headers = array();
   private static $_body = array();
